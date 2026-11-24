@@ -375,11 +375,16 @@
 
     const meta = {
       orders: ['Quản lý Đơn hàng', 'Theo dõi, duyệt đơn, vận chuyển và xử lý hoàn tiền'],
-      dashboard: ['Tổng quan & Báo cáo', 'Các chỉ số vận hành và phễu chuyển đổi từ dữ liệu thật'],
-      returns: ['Đổi trả & Khiếu nại', 'Tiếp nhận phản hồi khách hàng, kiểm tra quy định 7 ngày và hoàn tồn kho'],
-      inventory: ['Quản lý Tồn kho Biến thể', 'Giám sát số lượng tồn khả dụng theo từng kích thước thiết kế'],
-      products: ['Danh mục Sản phẩm', 'Danh sách sản phẩm Việt Phục hiện hành và phân loại'],
-      reconciliation: ['Bảng Đối soát COD', 'Theo dõi tiền thu hộ, phí vận chuyển và số tiền thực nhận về cửa hàng']
+      dashboard: ['Tổng quan & Cảnh báo', 'Chỉ số vận hành, biểu đồ và cảnh báo thời gian thực từ JSON'],
+      returns: ['Đổi trả & Bảo hành', 'Tiếp nhận yêu cầu, đối chiếu hạn 7 ngày, kiểm tra hàng và hoàn nhập kho'],
+      inventory: ['Quản lý Tồn kho SKU', 'Nhập/xuất/điều chỉnh tồn kho theo SKU và theo dõi nhật ký kho'],
+      products: ['Danh mục & Sản phẩm', 'Quản lý danh mục, sản phẩm, biến thể màu/size và mã SKU chuẩn'],
+      customers: ['Quản lý Khách hàng', 'Danh sách, chi tiết lịch sử đơn hàng và khóa/mở khóa tài khoản'],
+      reconciliation: ['Thanh toán & Hoàn tiền', 'Giao dịch mô phỏng, hoàn tiền và đối soát COD'],
+      shipping: ['Quản lý Vận chuyển', 'Cập nhật đơn vị vận chuyển giả lập, mã vận đơn và trạng thái giao nhận'],
+      promotions: ['Quản lý Khuyến mãi', 'Tạo mã giảm giá, giới hạn lượt dùng và thống kê áp dụng'],
+      policies: ['Chính sách & Nội dung', 'Chỉnh sửa chính sách cửa hàng, nội dung hiển thị và lịch sử phiên bản'],
+      reports: ['Báo cáo & Thống kê', 'Doanh thu, đơn hàng, sản phẩm, khách hàng, xuất CSV và nhật ký Admin']
     };
     const [title, sub] = meta[tabName] || ['Quản trị', ''];
     document.getElementById('current-tab-title').textContent = title;
@@ -392,7 +397,9 @@
 
   function renderCurrentTab() {
     updateBadges();
+    const mod = window.VPAdminModules;
     if (currentTab === 'orders') renderOrdersTable();
+    else if (mod && typeof mod[currentTab] === 'function') mod[currentTab]();
     else if (currentTab === 'dashboard') renderDashboard();
     else if (currentTab === 'returns') renderReturnsTable();
     else if (currentTab === 'inventory') renderInventoryTable();
@@ -457,8 +464,9 @@
     const filterStatus = document.getElementById('filter-order-status')?.value || 'all';
     const filterPayment = document.getElementById('filter-order-payment')?.value || 'all';
     const filterMethod = document.getElementById('filter-order-method')?.value || 'all';
+    const filterDate = document.getElementById('filter-order-date')?.value || '';
 
-    const hasActiveFilter = Boolean(search || filterStatus !== 'all' || filterPayment !== 'all' || filterMethod !== 'all');
+    const hasActiveFilter = Boolean(search || filterStatus !== 'all' || filterPayment !== 'all' || filterMethod !== 'all' || filterDate);
     const resetBtn = document.getElementById('btn-reset-order-filters');
     if (resetBtn) resetBtn.style.display = hasActiveFilter ? 'inline-flex' : 'none';
 
@@ -469,6 +477,7 @@
         const matchesPhone = (o.phone || '').toLowerCase().includes(search);
         if (!matchesId && !matchesReceiver && !matchesPhone) return false;
       }
+      if (filterDate && !(o.createdAt || '').startsWith(filterDate)) return false;
       const statusLabel = orderStatusText(o.orderStatus);
       const payLabel = paymentStatusText(o.paymentStatus);
       if (filterStatus !== 'all' && statusLabel !== filterStatus && o.orderStatus !== filterStatus) return false;
@@ -1268,7 +1277,12 @@
     document.getElementById('filter-order-status')?.addEventListener('change', renderOrdersTable);
     document.getElementById('filter-order-payment')?.addEventListener('change', renderOrdersTable);
     document.getElementById('filter-order-method')?.addEventListener('change', renderOrdersTable);
-    document.getElementById('btn-reset-order-filters')?.addEventListener('click', resetOrderFilters);
+    document.getElementById('filter-order-date')?.addEventListener('change', renderOrdersTable);
+    document.getElementById('btn-reset-order-filters')?.addEventListener('click', () => {
+      const d = document.getElementById('filter-order-date');
+      if (d) d.value = '';
+      resetOrderFilters();
+    });
 
     document.getElementById('filter-inventory-status')?.addEventListener('change', renderInventoryTable);
     document.getElementById('product-search')?.addEventListener('input', renderProductsTable);
@@ -1440,5 +1454,28 @@
       }
     });
   });
+
+  window.VPAdminBridge = {
+    getState: () => dbState,
+    getRevision: () => dbRevision,
+    getConfig: () => businessConfig,
+    adminActionRequest,
+    showToast,
+    showConfirmDialog,
+    showPromptDialog,
+    openOrderDetail: id => { selectedOrderId = id; renderOrderDetail(id); },
+    switchTab,
+    money,
+    esc,
+    formatDate,
+    orderStatusText,
+    paymentStatusText,
+    settlementText,
+    getStatusBadgeHtml,
+    getPaymentBadgeHtml,
+    renderEmptyRow,
+    icons,
+    colorSwatches
+  };
 
 })();

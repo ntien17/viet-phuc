@@ -7,7 +7,9 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const { validateDatabaseV2 } = require('./schemas/database.schema');
+const { COLOR_CODE_MAP, ENUMS, ID_REGEX, buildSku } = require('./schemas/common.schema');
 const { migrateDatabaseFile } = require('./migrations/migrate-v1-to-v2');
+const { createAdminHandler } = require('./lib/admin-handlers');
 
 const root = path.join(__dirname, 'dist');
 const dataDir = path.resolve(process.env.VIETPHUC_DATA_DIR || path.join(__dirname, 'data'));
@@ -435,6 +437,24 @@ function recordAdminLog(draftState, actor, action, targetId, detail) {
   });
 }
 
+const handleAdminRoutes = createAdminHandler({
+  sendJson,
+  parseJsonBody,
+  verifyWriteRequest,
+  requireAdmin,
+  runTransaction,
+  sanitizeAdminState,
+  adjustStockWithLog,
+  recordAdminLog,
+  customerSessions,
+  getDatabase: () => database,
+  BUSINESS_CONFIG,
+  buildSku,
+  COLOR_CODE_MAP,
+  ENUMS,
+  ID_REGEX,
+});
+
 // =========================================================
 // HTTP SERVER ROUTING
 // =========================================================
@@ -443,9 +463,11 @@ const server = http.createServer((req, res) => {
   if (!/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(requestHost)) {
     return sendJson(res, 403, { error: 'forbidden_host' });
   }
+  let urlObj;
   let pathname;
   try {
-    pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    urlObj = new URL(req.url, 'http://localhost');
+    pathname = decodeURIComponent(urlObj.pathname);
   } catch {
     return sendJson(res, 400, { error: 'invalid_url' });
   }
@@ -506,25 +528,249 @@ const server = http.createServer((req, res) => {
   }
 
   // -------------------------------------------------------
-  // 2. CUSTOMER API (KHUNG BẢO VỆ GĐ1 — AUTH SẼ MỞ Ở GĐ2)
+  // 2. CUSTOMER API (GĐ2 – TÀI KHOẢN KHÁCH HÀNG)
   // -------------------------------------------------------
+  const normalizeEmail = e => String(e || '').trim().toLowerCase();
+  const isValidEmail = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) && e.length <= 200;
+  const normalizePhone = p => String(p || '').trim().replace(/[\s.-]/g, '').replace(/^\+84/, '0');
+  const isValidPhone = p => /^0\d{8,10}$/.test(p);
+  const publicCustomerView = c => ({
+    id: c.id,
+    name: c.name,
+    email: c.email,
+    phone: c.phone,
+    defaultAddress: c.defaultAddress || '',
+    createdAt: c.createdAt,
+    updatedAt: c.updatedAt || c.createdAt,
+  });
+  function verifyCustomerPass(password, c) {
+    if (!c || typeof password !== 'string') return false;
+    try {
+      const hash = crypto.scryptSync(password, c.passwordSalt, 64);
+      const expected = Buffer.from(c.passwordHash, 'hex');
+      return hash.length === expected.length && crypto.timingSafeEqual(hash, expected);
+    } catch {
+      return false;
+    }
+  }
+  function revokeCustomerSessions(customerId) {
+    for (const [tok, sess] of customerSessions.entries()) {
+      if (sess.customerId === customerId) customerSessions.delete(tok);
+    }
+  }
+
+  if (pathname === '/api/customer/register') {
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
+    if (!verifyWriteRequest(req, res)) return;
+    parseJsonBody(req, async (err, body) => {
+      if (err) return sendJson(res, err.code, { error: err.error });
+      const name = String(body?.name || '').trim();
+      const email = normalizeEmail(body?.email);
+      const phone = normalizePhone(body?.phone);
+      const password = body?.password;
+
+      if (name.length < 2 || name.length > 150) {
+        return sendJson(res, 400, { error: 'invalid_name', message: 'Họ và tên phải từ 2 đến 150 ký tự.' });
+      }
+      if (!isValidEmail(email)) {
+        return sendJson(res, 400, { error: 'invalid_email', message: 'Email không hợp lệ.' });
+      }
+      if (!isValidPhone(phone)) {
+        return sendJson(res, 400, { error: 'invalid_phone', message: 'Số điện thoại không hợp lệ (gồm 9-11 chữ số, bắt đầu bằng 0).' });
+      }
+      if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
+        return sendJson(res, 400, { error: 'invalid_password', message: 'Mật khẩu phải có ít nhất 8 ký tự.' });
+      }
+
+      try {
+        const txRes = await runTransaction(null, draft => {
+          if (draft.customers.some(c => c.email === email)) {
+            const e = new Error('Email này đã được đăng ký.');
+            e.statusCode = 409; e.code = 'email_exists'; throw e;
+          }
+          if (draft.customers.some(c => c.phone === phone)) {
+            const e = new Error('Số điện thoại này đã được đăng ký.');
+            e.statusCode = 409; e.code = 'phone_exists'; throw e;
+          }
+          const salt = crypto.randomBytes(16).toString('hex');
+          const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+          const nowIso = new Date().toISOString();
+          const customer = {
+            id: 'cus_' + crypto.randomBytes(6).toString('hex'),
+            name,
+            email,
+            phone,
+            defaultAddress: '',
+            passwordSalt: salt,
+            passwordHash: hash,
+            locked: false,
+            lockedReason: '',
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          };
+          draft.customers.push(customer);
+          return customer;
+        });
+
+        const token = crypto.randomBytes(32).toString('hex');
+        const now = Date.now();
+        customerSessions.set(token, { customerId: txRes.result.id, expiresAt: now + SESSION_TTL_MS, lastActiveAt: now });
+        const cookie = `vp_customer_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=86400`;
+        return sendJson(res, 201, { customer: publicCustomerView(txRes.result) }, { 'Set-Cookie': cookie });
+      } catch (e) {
+        return sendJson(res, e.statusCode || 500, { error: e.code || 'register_failed', message: e.message });
+      }
+    });
+    return;
+  }
+
+  if (pathname === '/api/customer/login') {
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
+    if (!verifyWriteRequest(req, res)) return;
+    const rateKey = 'cust:' + (req.socket.remoteAddress || 'local');
+    if (!checkLoginRateLimit(rateKey)) {
+      return sendJson(res, 429, { error: 'too_many_requests', message: 'Thử đăng nhập sai quá nhiều lần. Vui lòng đợi 5 phút.' });
+    }
+    parseJsonBody(req, (err, body) => {
+      if (err) return sendJson(res, err.code, { error: err.error });
+      const email = normalizeEmail(body?.email);
+      const password = body?.password;
+      const customer = database.state.customers.find(c => c.email === email);
+      if (!customer || typeof password !== 'string' || !verifyCustomerPass(password, customer)) {
+        recordLoginFailure(rateKey);
+        return sendJson(res, 401, { error: 'invalid_credentials', message: 'Email hoặc mật khẩu không đúng.' });
+      }
+      if (customer.locked) {
+        return sendJson(res, 403, { error: 'account_locked', message: 'Tài khoản của bạn đã bị khóa.' });
+      }
+      clearLoginFailures(rateKey);
+      const token = crypto.randomBytes(32).toString('hex');
+      const now = Date.now();
+      customerSessions.set(token, { customerId: customer.id, expiresAt: now + SESSION_TTL_MS, lastActiveAt: now });
+      const cookie = `vp_customer_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=86400`;
+      return sendJson(res, 200, { customer: publicCustomerView(customer) }, { 'Set-Cookie': cookie });
+    });
+    return;
+  }
+
+  if (pathname === '/api/customer/logout') {
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
+    if (!verifyWriteRequest(req, res, false)) return;
+    const session = getCustomerSession(req);
+    if (session) customerSessions.delete(session.token);
+    const cookie = `vp_customer_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`;
+    return sendJson(res, 200, { success: true }, { 'Set-Cookie': cookie });
+  }
+
   if (pathname === '/api/customer/session') {
     if (req.method !== 'GET') return sendJson(res, 405, { error: 'method_not_allowed' });
     const session = getCustomerSession(req);
     if (!session) return sendJson(res, 200, { loggedIn: false });
     const customer = database.state.customers.find(c => c.id === session.customerId);
-    if (!customer || customer.locked) return sendJson(res, 200, { loggedIn: false });
-    return sendJson(res, 200, {
-      loggedIn: true,
-      customer: { id: customer.id, name: customer.name, email: customer.email, phone: customer.phone, defaultAddress: customer.defaultAddress },
+    if (!customer || customer.locked) {
+      customerSessions.delete(session.token);
+      return sendJson(res, 200, { loggedIn: false });
+    }
+    return sendJson(res, 200, { loggedIn: true, customer: publicCustomerView(customer) });
+  }
+
+  if (pathname === '/api/customer/me') {
+    if (req.method !== 'GET') return sendJson(res, 405, { error: 'method_not_allowed' });
+    const auth = requireCustomer(req, res);
+    if (!auth) return;
+    return sendJson(res, 200, { customer: publicCustomerView(auth.customer) });
+  }
+
+  if (pathname === '/api/customer/profile') {
+    if (req.method !== 'PUT') return sendJson(res, 405, { error: 'method_not_allowed' });
+    if (!verifyWriteRequest(req, res)) return;
+    const auth = requireCustomer(req, res);
+    if (!auth) return;
+    parseJsonBody(req, async (err, body) => {
+      if (err) return sendJson(res, err.code, { error: err.error });
+      const name = String(body?.name || '').trim();
+      const phone = normalizePhone(body?.phone);
+      const defaultAddress = String(body?.defaultAddress ?? '').trim();
+      if (name.length < 2 || name.length > 150) {
+        return sendJson(res, 400, { error: 'invalid_name', message: 'Họ và tên phải từ 2 đến 150 ký tự.' });
+      }
+      if (!isValidPhone(phone)) {
+        return sendJson(res, 400, { error: 'invalid_phone', message: 'Số điện thoại không hợp lệ.' });
+      }
+      if (defaultAddress.length > 500) {
+        return sendJson(res, 400, { error: 'invalid_address', message: 'Địa chỉ tối đa 500 ký tự.' });
+      }
+      try {
+        const txRes = await runTransaction(null, draft => {
+          const c = draft.customers.find(x => x.id === auth.customer.id);
+          if (!c || c.locked) {
+            const e = new Error('Tài khoản không khả dụng.');
+            e.statusCode = 403; e.code = 'account_locked'; throw e;
+          }
+          if (draft.customers.some(x => x.id !== c.id && x.phone === phone)) {
+            const e = new Error('Số điện thoại đã được tài khoản khác sử dụng.');
+            e.statusCode = 409; e.code = 'phone_exists'; throw e;
+          }
+          c.name = name;
+          c.phone = phone;
+          c.defaultAddress = defaultAddress;
+          c.updatedAt = new Date().toISOString();
+          return c;
+        });
+        return sendJson(res, 200, { customer: publicCustomerView(txRes.result) });
+      } catch (e) {
+        return sendJson(res, e.statusCode || 500, { error: e.code || 'profile_update_failed', message: e.message });
+      }
     });
+    return;
+  }
+
+  if (pathname === '/api/customer/change-password') {
+    if (req.method !== 'PUT') return sendJson(res, 405, { error: 'method_not_allowed' });
+    if (!verifyWriteRequest(req, res)) return;
+    const auth = requireCustomer(req, res);
+    if (!auth) return;
+    parseJsonBody(req, async (err, body) => {
+      if (err) return sendJson(res, err.code, { error: err.error });
+      const currentPassword = body?.currentPassword;
+      const newPassword = body?.newPassword;
+      if (typeof currentPassword !== 'string' || !verifyCustomerPass(currentPassword, auth.customer)) {
+        return sendJson(res, 401, { error: 'invalid_current_password', message: 'Mật khẩu hiện tại không đúng.' });
+      }
+      if (typeof newPassword !== 'string' || newPassword.length < 8 || newPassword.length > 128) {
+        return sendJson(res, 400, { error: 'invalid_new_password', message: 'Mật khẩu mới phải có ít nhất 8 ký tự.' });
+      }
+      try {
+        await runTransaction(null, draft => {
+          const c = draft.customers.find(x => x.id === auth.customer.id);
+          if (!c || c.locked) {
+            const e = new Error('Tài khoản không khả dụng.');
+            e.statusCode = 403; e.code = 'account_locked'; throw e;
+          }
+          const salt = crypto.randomBytes(16).toString('hex');
+          const hash = crypto.scryptSync(newPassword, salt, 64).toString('hex');
+          c.passwordSalt = salt;
+          c.passwordHash = hash;
+          c.updatedAt = new Date().toISOString();
+        });
+        revokeCustomerSessions(auth.customer.id);
+        const clearCookie = `vp_customer_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`;
+        return sendJson(res, 200, { success: true, message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.' }, { 'Set-Cookie': clearCookie });
+      } catch (e) {
+        return sendJson(res, e.statusCode || 500, { error: e.code || 'change_password_failed', message: e.message });
+      }
+    });
+    return;
   }
 
   if (pathname === '/api/customer/orders') {
     if (req.method !== 'GET') return sendJson(res, 405, { error: 'method_not_allowed' });
     const auth = requireCustomer(req, res);
     if (!auth) return;
-    const myOrders = database.state.orders.filter(o => o.customerId === auth.customer.id);
+    const myOrders = database.state.orders
+      .filter(o => o.customerId === auth.customer.id)
+      .slice()
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
     return sendJson(res, 200, { orders: myOrders });
   }
 
@@ -544,7 +790,7 @@ const server = http.createServer((req, res) => {
   if (pathname === '/api/orders' || pathname.startsWith('/api/orders/')) {
     const auth = requireCustomer(req, res);
     if (!auth) return;
-    return sendJson(res, 501, { error: 'not_implemented_in_gd1' });
+    return sendJson(res, 501, { error: 'not_implemented_in_gd2' });
   }
 
   // Test-only fixture endpoint (chỉ bật khi VIETPHUC_TEST_MODE=1 để kiểm thử phân tách session)
@@ -552,18 +798,19 @@ const server = http.createServer((req, res) => {
     if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
     parseJsonBody(req, async (err, body) => {
       if (err) return sendJson(res, err.code, { error: err.error });
-      const { customerId, name, email, locked } = body || {};
+      const { customerId, name, email, phone, locked } = body || {};
       try {
         await runTransaction(null, draft => {
           let c = draft.customers.find(x => x.id === customerId);
           if (!c) {
             const salt = crypto.randomBytes(16).toString('hex');
             const hash = crypto.scryptSync('test-pass-only', salt, 64).toString('hex');
+            const uniqueDigits = String(crypto.createHash('md5').update(String(customerId)).digest('hex').replace(/\D/g, '') + '00000000').slice(0, 8);
             c = {
               id: customerId,
               name: name || 'Test Customer',
               email: email || `${customerId}@example.com`,
-              phone: '0900000000',
+              phone: phone || `09${uniqueDigits}`,
               defaultAddress: '',
               passwordSalt: salt,
               passwordHash: hash,
@@ -813,7 +1060,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Duyệt/từ chối đổi trả hiện có
+  // Duyệt / nhận kiểm tra / từ chối đổi trả & bảo hành (2.4.7)
   const returnMatch = pathname.match(/^\/api\/admin\/returns\/([^/]+)$/);
   if (returnMatch) {
     if (req.method !== 'PATCH') return sendJson(res, 405, { error: 'method_not_allowed' });
@@ -824,7 +1071,7 @@ const server = http.createServer((req, res) => {
 
     parseJsonBody(req, async (err, body) => {
       if (err) return sendJson(res, err.code, { error: err.error });
-      const { action, note, revision } = body || {};
+      const { action, note, itemConditions, resolution, revision } = body || {};
       try {
         const txRes = await runTransaction(revision, draft => {
           const ret = draft.returns.find(r => r.id === retId);
@@ -839,23 +1086,47 @@ const server = http.createServer((req, res) => {
           const now = new Date().toISOString();
           const o = draft.orders.find(x => x.id === ret.orderId);
           if (action === 'approve') {
-            ret.status = 'completed';
-            ret.resolution = 'refund';
-            ret.resolvedAt = now;
-            for (const it of ret.items) {
-              it.condition = 'resellable';
-              if (it.sku && Object.prototype.hasOwnProperty.call(draft.stock, it.sku)) {
-                adjustStockWithLog(draft, it.sku, it.productId, it.qty, 'return_restock', o?.id || ret.id, session.user);
-              }
+            if (ret.status !== 'pending') {
+              const e = new Error('Chỉ có thể duyệt yêu cầu đang chờ xử lý.');
+              e.statusCode = 409; e.code = 'invalid_transition'; throw e;
             }
+            ret.status = 'approved';
+            ret.approvedAt = now;
+            ret.adminNote = String(note || '').trim().slice(0, 500);
             if (o) {
-              o.inventoryStatus = 'returned';
-              o.history.push({ status: o.orderStatus, note: 'Chấp thuận đổi trả & nhập lại kho', actor: session.user, at: now });
+              o.history.push({ status: o.orderStatus, note: `Duyệt yêu cầu ${ret.type} (${ret.id}) - chờ nhận & kiểm tra hàng`, actor: session.user, at: now });
+            }
+          } else if (action === 'complete') {
+            if (ret.status !== 'approved' && ret.status !== 'pending') {
+              const e = new Error('Yêu cầu chưa ở trạng thái hợp lệ để hoàn tất.');
+              e.statusCode = 409; e.code = 'invalid_transition'; throw e;
+            }
+            ret.status = 'completed';
+            ret.resolution = resolution || (ret.type === 'warranty' ? 'warranty_done' : 'refund');
+            ret.resolvedAt = now;
+            ret.adminNote = String(note || ret.adminNote || '').trim().slice(0, 500);
+            let restockedAny = false;
+            ret.items.forEach((it, idx) => {
+              const cond = itemConditions && itemConditions[idx] ? itemConditions[idx] : (it.condition === 'damaged' ? 'damaged' : 'resellable');
+              if (!['resellable', 'damaged'].includes(cond)) {
+                const e = new Error('Tình trạng kiểm tra hàng không hợp lệ (resellable hoặc damaged).');
+                e.statusCode = 400; e.code = 'invalid_condition'; throw e;
+              }
+              it.condition = cond;
+              if (cond === 'resellable' && ret.type !== 'warranty' && it.sku && Object.prototype.hasOwnProperty.call(draft.stock, it.sku)) {
+                adjustStockWithLog(draft, it.sku, it.productId, it.qty, 'return_restock', o?.id || ret.id, session.user);
+                restockedAny = true;
+              }
+            });
+            if (o) {
+              if (restockedAny) o.inventoryStatus = 'returned';
+              o.history.push({ status: o.orderStatus, note: `Hoàn tất ${ret.type} (${ret.id})${restockedAny ? ' & nhập kho hàng đạt chuẩn' : ' (không nhập kho bán)'}`, actor: session.user, at: now });
             }
           } else if (action === 'reject') {
             ret.status = 'rejected';
             ret.resolvedAt = now;
-            if (o) o.history.push({ status: o.orderStatus, note: `Từ chối đổi trả: ${note || ''}`, actor: session.user, at: now });
+            ret.adminNote = String(note || '').trim().slice(0, 500);
+            if (o) o.history.push({ status: o.orderStatus, note: `Từ chối yêu cầu ${ret.type} (${ret.id}): ${note || ''}`, actor: session.user, at: now });
           } else {
             const e = new Error('Hành động không hợp lệ.');
             e.statusCode = 400; e.code = 'invalid_action'; throw e;
@@ -871,6 +1142,8 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
+
+  if (handleAdminRoutes(req, res, pathname, urlObj) || res.writableEnded || res.headersSent) return;
 
   if (pathname.startsWith('/api/')) return sendJson(res, 404, { error: 'not_found' });
 
