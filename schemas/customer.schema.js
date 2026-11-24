@@ -12,6 +12,7 @@ const {
 function validateCustomers(customers, err) {
   const customerIds = new Set();
   const emails = new Set();
+  const phones = new Set();
   if (!Array.isArray(customers) || customers.length > 50000) {
     err.add('state.customers', 'customers phải là mảng hợp lệ.');
     return customerIds;
@@ -33,13 +34,24 @@ function validateCustomers(customers, err) {
     } else {
       emails.add(cus.email);
     }
-    if (!isOptionalString(cus.phone, 30)) err.add(`${cp}.phone`, 'Số điện thoại không hợp lệ.');
+    if (!isOptionalString(cus.phone, 30)) {
+      err.add(`${cp}.phone`, 'Số điện thoại không hợp lệ.');
+    } else if (typeof cus.phone === 'string' && cus.phone.trim().length > 0) {
+      if (phones.has(cus.phone)) {
+        err.add(`${cp}.phone`, 'Số điện thoại bị trùng.');
+      } else {
+        phones.add(cus.phone);
+      }
+    }
     if (!isOptionalString(cus.defaultAddress, 500)) err.add(`${cp}.defaultAddress`, 'Địa chỉ mặc định không hợp lệ.');
     if (!isNonEmptyString(cus.passwordSalt, 128)) err.add(`${cp}.passwordSalt`, 'Thiếu passwordSalt.');
     if (!isNonEmptyString(cus.passwordHash, 256)) err.add(`${cp}.passwordHash`, 'Thiếu passwordHash.');
     if (typeof cus.locked !== 'boolean') err.add(`${cp}.locked`, 'locked phải là boolean.');
     if (!isOptionalString(cus.lockedReason, 500)) err.add(`${cp}.lockedReason`, 'lockedReason không hợp lệ.');
     if (!isIsoDateString(cus.createdAt)) err.add(`${cp}.createdAt`, 'createdAt phải là ngày ISO.');
+    if (cus.updatedAt !== undefined && cus.updatedAt !== null && !isIsoDateString(cus.updatedAt)) {
+      err.add(`${cp}.updatedAt`, 'updatedAt phải là ngày ISO.');
+    }
   });
 
   return customerIds;
