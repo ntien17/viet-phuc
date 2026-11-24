@@ -141,7 +141,7 @@ textarea{resize:vertical;min-height:90px}
 .category-image{background-image:url('assets/ao-dai-do.png');background-size:cover;background-position:center top;aspect-ratio:4/5}
 .category-two .category-image{background-image:url('assets/ao-dai-xanh.png');background-position:center top}
 .category-three .category-image{background-image:url('assets/ao-ba-ba.png');background-position:center top}
-.category-four .category-image{background-image:url('https://cdn.hstatic.net/200000503583/file/ao-tu-than-cardina-1.jpg_e06309cb2800499c8db15f98fcf5ccc1.jpg');background-size:cover;background-position:center top}
+.category-four .category-image{background-image:url('assets/ao-tu-than.png');background-size:cover;background-position:center top}
 .category-label{padding-top:15px}
 .category-label span{color:var(--wine);font-size:9px;letter-spacing:.14em;font-weight:600}
 .category-label h3{margin:7px 0 2px;font-size:13px;text-transform:none;letter-spacing:0}
@@ -173,3 +173,17 @@ textarea{resize:vertical;min-height:90px}
 .footer-grid .demo-note{font-size:10px;max-width:300px}
 @media(max-width:800px){.topbar{justify-content:center}.topbar>span:first-child,.topbar>span:last-child{display:none}.header-inner{padding:0 24px}.mobile-menu{display:block;padding:0;font-size:21px}.header-inner>.brand{margin-right:auto}.header-actions{gap:12px}.hero{min-height:560px;background-position:65% center}.benefit-bar{grid-template-columns:repeat(2,1fr);padding:24px;gap:20px}.benefit-bar>div{justify-content:flex-start}.categories,.products-section,.journal{padding-left:24px;padding-right:24px}.category-grid{grid-template-columns:repeat(4,180px)}.journal-grid{gap:12px}.journal article h3{font-size:17px}.newsletter{padding:45px 24px}.site-footer{padding-left:24px;padding-right:24px}}
 @media(max-width:520px){.header-inner{padding:0 16px;gap:12px}.header-actions{gap:8px}.hero{min-height:520px;background-position:68% center}.hero-content{width:calc(100% - 32px)}.hero-side{display:none}.hero-index{left:16px}.benefit-bar{padding:20px 16px;gap:16px 8px}.benefit-bar>div{gap:8px}.benefit-bar>div>span{font-size:23px}.benefit-bar strong{font-size:9px}.benefit-bar small{font-size:9px}.categories,.products-section,.journal{padding-left:16px;padding-right:16px}.category-grid{grid-template-columns:repeat(4,145px)}.category-label h3{font-size:12px}.editorial-image{background-size:cover;background-position:70% center}.journal-grid{grid-template-columns:1fr;gap:30px}.journal-image{aspect-ratio:16/10;background-size:cover}.newsletter{align-items:flex-start;flex-direction:column;padding:40px 16px}.newsletter .btn{width:100%}.site-footer{padding-left:16px;padding-right:16px}}
+
+/* Catalog controls */
+.category-grid{grid-template-columns:repeat(5,minmax(0,1fr))}
+.category-five .category-image{background-image:url('assets/accessory.png');background-size:cover;background-position:center}
+.catalog-toolbar{display:grid;grid-template-columns:minmax(220px,2fr) minmax(170px,1fr) minmax(160px,1fr) auto;gap:12px;align-items:end;padding:22px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.catalog-field{display:block;min-width:0}
+.catalog-field>span{display:block;margin-bottom:7px;font-size:13px;font-weight:600}
+.catalog-field input,.catalog-field select{width:100%;height:48px;min-height:48px;border:1px solid #d7d1ca;background:#fff;padding:0 14px;font:14px var(--sans)}
+.catalog-field select{appearance:none;padding-right:36px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23322b28' stroke-width='1.5' d='m4 6 4 4 4-4'/%3E%3C/svg%3E") no-repeat right 12px center}
+.catalog-filter-btn{height:48px;padding:0 22px;border:1px solid #25211f;background:#25211f;color:#fff;font-size:12px;font-weight:700;letter-spacing:.06em;white-space:nowrap}
+.catalog-filter-btn span{font-size:20px;vertical-align:middle;margin-right:7px}
+.catalog-meta{min-height:52px;display:flex;align-items:center;color:#675f5a;font-size:14px}
+@media(max-width:800px){.category-grid{grid-template-columns:repeat(5,180px)}.catalog-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.catalog-search{grid-column:1/-1}.catalog-filter-btn{width:100%}}
+@media(max-width:520px){.category-grid{grid-template-columns:repeat(5,145px)}.catalog-toolbar{gap:12px}.catalog-field>span{font-size:13px}.catalog-field input,.catalog-field select{font-size:14px}.catalog-filter-btn{grid-column:1/-1}}

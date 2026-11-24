@@ -1,0 +1,11 @@
+[
+  {"id":"p1","name":"Áo dài An Nhiên","category":"Áo dài truyền thống","price":1250000,"old":1450000,"color":"Đỏ trầm","material":"Lụa mềm","tag":"BÁN CHẠY","img":"assets/ao-dai-do.png","addedAt":"2026-01-10"},
+  {"id":"p2","name":"Áo dài Bạch Liên","category":"Áo dài truyền thống","price":890000,"color":"Trắng ngà","material":"Lụa tổng hợp","tag":"MỚI","img":"assets/ao-dai-trang.png","addedAt":"2026-03-14"},
+  {"id":"p3","name":"Bộ tứ thân Kinh Bắc","category":"Áo tứ thân","price":1150000,"color":"Nâu đất","material":"Cotton pha","tag":"ĐƯỢC YÊU THÍCH","img":"assets/ao-tu-than.png","addedAt":"2026-02-02"},
+  {"id":"p4","name":"Áo bà ba Hương Sen","category":"Áo bà ba","price":690000,"color":"Hồng sen","material":"Cotton mềm","tag":"MỚI","img":"assets/ao-ba-ba.png","addedAt":"2026-04-05"},
+  {"id":"p5","name":"Bộ tứ thân Thương Nhớ","category":"Áo tứ thân","price":1290000,"color":"Đen","material":"Cotton pha","tag":"DI SẢN VIỆT","img":"assets/ao-tu-than.png","addedAt":"2026-01-21"},
+  {"id":"p6","name":"Áo bà ba Mộc Miên","category":"Áo bà ba","price":590000,"color":"Hồng phấn","material":"Cotton mềm","tag":"BÁN CHẠY","img":"assets/ao-ba-ba.png","addedAt":"2026-02-25"},
+  {"id":"p7","name":"Bộ Việt phục Đồng Quê","category":"Áo tứ thân","price":990000,"color":"Nâu đất","material":"Cotton pha","tag":"MỚI","img":"assets/ao-tu-than.png","addedAt":"2026-05-12"},
+  {"id":"p8","name":"Áo dài cách tân Lụa Mộc","category":"Áo dài cách tân","price":790000,"color":"Xanh nhạt","material":"Lụa tổng hợp","tag":"MỚI","img":"assets/ao-dai-xanh.png","addedAt":"2026-06-08"},
+  {"id":"p9","name":"Mấn gấm đỏ truyền thống","category":"Phụ kiện","price":320000,"color":"Đỏ trầm","material":"Gấm","tag":"MỚI","img":"assets/accessory.png","sizes":["One Size"],"addedAt":"2026-07-01"}
+]
