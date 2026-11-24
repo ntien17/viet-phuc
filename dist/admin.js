@@ -31,22 +31,71 @@
     eyeOff: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>`
   };
 
+  // Ánh xạ Enum Schema V2 -> Nhãn tiếng Việt hiển thị trên UI
+  const ORDER_STATUS_LABELS = {
+    pending: 'Chờ xác nhận',
+    confirmed: 'Đã xác nhận',
+    packing: 'Đang đóng gói',
+    shipping: 'Đang giao',
+    delivered: 'Đã giao',
+    delivery_failed: 'Giao thất bại',
+    returning: 'Đang hoàn hàng',
+    returned: 'Đã hoàn hàng',
+    cancelled: 'Đã hủy',
+  };
+  const PAYMENT_STATUS_LABELS = {
+    unpaid: 'Chưa thanh toán',
+    pending: 'Chờ thanh toán',
+    paid: 'Thanh toán thành công',
+    failed: 'Thanh toán thất bại',
+    partially_refunded: 'Đã hoàn một phần',
+    refunded: 'Đã hoàn tiền',
+  };
+  const SETTLEMENT_LABELS = {
+    unsettled: 'Chưa đối soát',
+    pending: 'Đang đối soát',
+    settled: 'Đã đối soát',
+  };
+  const RETURN_STATUS_LABELS = {
+    pending: 'Chờ xử lý',
+    approved: 'Đã chấp nhận',
+    rejected: 'Bị từ chối',
+    completed: 'Đã hoàn tất',
+  };
+  const orderStatusText = s => ORDER_STATUS_LABELS[s] || RETURN_STATUS_LABELS[s] || s || 'Chờ xác nhận';
+  const paymentStatusText = s => PAYMENT_STATUS_LABELS[s] || s || 'Chưa thanh toán';
+  const settlementText = s => SETTLEMENT_LABELS[s] || s || 'Chưa đối soát';
+  let businessConfig = { shipping: { standardFee: 30000, remoteFee: 45000 }, codFee: 0, paymentFee: 0, returnWindowDays: 7 };
+  const defaultShippingFee = () => businessConfig?.shipping?.standardFee ?? 30000;
+  const remoteShippingFee = () => businessConfig?.shipping?.remoteFee ?? 45000;
+  const formatDate = iso => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleString('vi-VN');
+  };
+  const categoryNameOf = p => {
+    const cat = (dbState.categories || []).find(c => c.id === p.categoryId);
+    return cat ? cat.name : (p.category || '');
+  };
+  const getVariantStock = sku => dbState.stock?.[sku] ?? 0;
+
   // Trạng thái ứng dụng Admin
   let currentAdmin = null;
   let currentTab = 'orders';
   let dbRevision = 0;
-  let dbState = { products: [], orders: [], stock: {}, visits: 0, cartEvents: 0 };
+  let dbState = { categories: [], products: [], orders: [], returns: [], stock: {}, visits: 0, cartEvents: 0 };
   let isSaving = false;
   let selectedOrderId = null;
   let activeDialogResolve = null;
 
-  // Helpers Stock (giữ nguyên logic)
-  const stockKey = (id, size) => `${id}|${size}`;
-  const getAvailableStock = (id, size) => dbState.stock[stockKey(id, size)] ?? 8;
-  const modifyStock = (id, size, delta) => {
-    const key = stockKey(id, size);
-    const current = getAvailableStock(id, size);
-    dbState.stock[key] = Math.max(0, current + delta);
+  // Helpers Stock theo SKU V2
+  const getAvailableStock = (id, size) => {
+    const p = (dbState.products || []).find(x => x.id === id);
+    const v = p?.variants?.find(x => x.size === size);
+    if (v && Object.prototype.hasOwnProperty.call(dbState.stock || {}, v.sku)) {
+      return dbState.stock[v.sku];
+    }
+    return dbState.stock?.[`${id}|${size}`] ?? 0;
   };
 
   // Toast Notification thống nhất
@@ -189,7 +238,7 @@
     try {
       const res = await fetch('/api/admin/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-VP-Requested': '1' },
         body: JSON.stringify({ username, password })
       });
       const data = await res.json();
@@ -214,7 +263,7 @@
 
   async function logout() {
     try {
-      await fetch('/api/admin/logout', { method: 'POST' });
+      await fetch('/api/admin/logout', { method: 'POST', headers: { 'X-VP-Requested': '1' } });
     } catch (_) {}
     currentAdmin = null;
     closeOrderDetail();
@@ -233,7 +282,7 @@
     document.getElementById('dashboard-view').style.display = 'flex';
   }
 
-  // CSDL State Sync (giữ nguyên cơ chế revision)
+  // CSDL State Sync qua Admin API
   async function loadDatabase() {
     const syncBadge = document.getElementById('sync-status');
     const syncText = document.getElementById('sync-text');
@@ -243,13 +292,18 @@
     refreshIcon?.classList.add('spin-icon');
 
     try {
-      const res = await fetch('/api/state', { cache: 'no-store' });
+      const res = await fetch('/api/admin/bootstrap', { cache: 'no-store' });
+      if (res.status === 401) {
+        showAuthView();
+        return;
+      }
       if (!res.ok) throw new Error('Không thể nạp dữ liệu từ máy chủ.');
       const data = await res.json();
       dbRevision = data.revision;
       dbState = data.state;
+      if (data.config) businessConfig = data.config;
       syncBadge.className = 'sync-badge';
-      syncText.textContent = `CSDL JSON (rev ${dbRevision}): Đã đồng bộ`;
+      syncText.textContent = `CSDL JSON V2 (rev ${dbRevision}): Đã đồng bộ`;
       populateProductCategories();
       renderCurrentTab();
     } catch (err) {
@@ -261,7 +315,7 @@
     }
   }
 
-  async function commitDatabase(mutateFn) {
+  async function adminActionRequest(method, url, payload = {}) {
     if (isSaving) throw new Error('Đang lưu dữ liệu, vui lòng thao tác chậm lại.');
     isSaving = true;
     const syncBadge = document.getElementById('sync-status');
@@ -270,38 +324,34 @@
     syncText.textContent = 'Đang lưu vào JSON...';
 
     try {
-      const freshRes = await fetch('/api/state', { cache: 'no-store' });
-      if (!freshRes.ok) throw new Error('Không thể kết nối máy chủ.');
-      const freshData = await freshRes.json();
-      dbRevision = freshData.revision;
-      dbState = freshData.state;
-
-      const result = mutateFn(dbState);
-
-      const putRes = await fetch('/api/state', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ revision: dbRevision, state: dbState })
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'X-VP-Requested': '1' },
+        body: JSON.stringify({ ...payload, revision: dbRevision })
       });
-
-      if (putRes.status === 409) {
-        const conflict = await putRes.json();
-        dbRevision = conflict.revision;
-        dbState = conflict.state;
-        renderCurrentTab();
-        throw new Error('Dữ liệu vừa được cập nhật ở phiên khác. Đã tự động đồng bộ lại, vui lòng thực hiện lại.');
+      if (res.status === 401) {
+        showAuthView();
+        throw new Error('Phiên đăng nhập Admin đã hết hạn.');
       }
-
-      if (!putRes.ok) throw new Error('Máy chủ không thể ghi dữ liệu.');
-      const savedData = await putRes.json();
-      dbRevision = savedData.revision;
-      dbState = savedData.state;
+      const data = await res.json();
+      if (res.status === 409 && data.state) {
+        dbRevision = data.revision;
+        dbState = data.state;
+        renderCurrentTab();
+        if (selectedOrderId) renderOrderDetail(selectedOrderId);
+        throw new Error(data.message || 'Dữ liệu vừa được cập nhật ở phiên khác. Đã đồng bộ lại.');
+      }
+      if (!res.ok) {
+        throw new Error(data.message || 'Máy chủ không thể thực hiện thao tác.');
+      }
+      dbRevision = data.revision;
+      if (data.state) dbState = data.state;
 
       syncBadge.className = 'sync-badge';
-      syncText.textContent = `CSDL JSON (rev ${dbRevision}): Đã lưu`;
+      syncText.textContent = `CSDL JSON V2 (rev ${dbRevision}): Đã lưu`;
       renderCurrentTab();
       if (selectedOrderId) renderOrderDetail(selectedOrderId);
-      return result;
+      return data;
     } catch (err) {
       syncBadge.className = 'sync-badge error';
       syncText.textContent = 'Lỗi lưu dữ liệu';
@@ -352,35 +402,37 @@
 
   function updateBadges() {
     const orders = dbState.orders || [];
-    const pendingOrders = orders.filter(o => o.status === 'Chờ xác nhận').length;
+    const pendingOrders = orders.filter(o => o.orderStatus === 'pending').length;
     const pendingBadge = document.getElementById('pending-orders-badge');
     if (pendingBadge) pendingBadge.textContent = pendingOrders;
 
-    const returnOrders = orders.filter(o => o.returnStatus && o.returnStatus !== 'Đã hoàn tất' && o.returnStatus !== 'Bị từ chối').length;
+    const returnOrders = (dbState.returns || []).filter(r => r.status !== 'completed' && r.status !== 'rejected').length;
     const returnsBadge = document.getElementById('returns-badge');
     if (returnsBadge) returnsBadge.textContent = returnOrders;
   }
 
-  // Status Badge Class Helpers
+  // Status Badge Class Helpers (ánh xạ từ Enum V2)
   function getStatusBadgeHtml(status) {
+    const label = orderStatusText(status);
     let cls = 'pending';
-    if (status === 'Đã xác nhận' || status === 'Đã hoàn tất') cls = status === 'Đã hoàn tất' ? 'delivered' : 'confirmed';
-    else if (status === 'Đang giao') cls = 'shipping';
-    else if (status === 'Đã giao') cls = 'delivered';
-    else if (status === 'Giao thất bại' || status === 'Bị từ chối') cls = 'failed';
-    else if (status === 'Đang hoàn hàng') cls = 'returning';
-    else if (status === 'Đã hoàn hàng') cls = 'returned';
-    else if (status === 'Đã hủy') cls = 'cancelled';
-    return `<span class="status-pill ${cls}">${esc(status)}</span>`;
+    if (status === 'confirmed' || status === 'packing' || status === 'approved') cls = 'confirmed';
+    else if (status === 'shipping') cls = 'shipping';
+    else if (status === 'delivered' || status === 'completed') cls = 'delivered';
+    else if (status === 'delivery_failed' || status === 'rejected') cls = 'failed';
+    else if (status === 'returning') cls = 'returning';
+    else if (status === 'returned') cls = 'returned';
+    else if (status === 'cancelled') cls = 'cancelled';
+    return `<span class="status-pill ${cls}">${esc(label)}</span>`;
   }
 
   function getPaymentBadgeHtml(pStatus) {
+    const label = paymentStatusText(pStatus);
     let cls = 'unpaid';
-    if (pStatus === 'Thanh toán thành công') cls = 'paid';
-    else if (pStatus === 'Thanh toán thất bại') cls = 'failed';
+    if (pStatus === 'paid' || pStatus === 'Thanh toán thành công') cls = 'paid';
+    else if (pStatus === 'failed' || pStatus === 'Thanh toán thất bại') cls = 'failed';
     else if (pStatus === 'Chờ hoàn tiền') cls = 'refunding';
-    else if (pStatus === 'Đã hoàn tiền' || pStatus === 'Đã hoàn toàn bộ') cls = 'refunded';
-    return `<span class="payment-pill ${cls}">${esc(pStatus)}</span>`;
+    else if (pStatus === 'refunded' || pStatus === 'partially_refunded' || pStatus === 'Đã hoàn tiền' || pStatus === 'Đã hoàn toàn bộ') cls = 'refunded';
+    return `<span class="payment-pill ${cls}">${esc(label)}</span>`;
   }
 
   function renderEmptyRow(colspan, title, desc, actionBtnHtml = '') {
@@ -415,18 +467,19 @@
         const matchesId = (o.id || '').toLowerCase().includes(search);
         const matchesReceiver = (o.receiver || '').toLowerCase().includes(search);
         const matchesPhone = (o.phone || '').toLowerCase().includes(search);
-        const matchesEmail = (o.email || '').toLowerCase().includes(search);
-        if (!matchesId && !matchesReceiver && !matchesPhone && !matchesEmail) return false;
+        if (!matchesId && !matchesReceiver && !matchesPhone) return false;
       }
-      if (filterStatus !== 'all' && o.status !== filterStatus) return false;
+      const statusLabel = orderStatusText(o.orderStatus);
+      const payLabel = paymentStatusText(o.paymentStatus);
+      if (filterStatus !== 'all' && statusLabel !== filterStatus && o.orderStatus !== filterStatus) return false;
       if (filterPayment !== 'all') {
-        if (filterPayment === 'Đã hoàn tiền' && (o.paymentStatus === 'Đã hoàn toàn bộ' || o.paymentStatus === 'Đã hoàn tiền')) {
+        if (filterPayment === 'Đã hoàn tiền' && (o.paymentStatus === 'refunded' || o.paymentStatus === 'partially_refunded')) {
           // match
-        } else if (o.paymentStatus !== filterPayment) {
+        } else if (payLabel !== filterPayment && o.paymentStatus !== filterPayment) {
           return false;
         }
       }
-      if (filterMethod !== 'all' && o.payment !== filterMethod) return false;
+      if (filterMethod !== 'all' && o.paymentMethod !== filterMethod) return false;
       return true;
     });
 
@@ -454,7 +507,7 @@
       return `
         <tr>
           <td><span class="order-code">${esc(o.id)}</span></td>
-          <td style="color: var(--text-muted); font-size: 12px; white-space: nowrap;">${esc(o.date)}</td>
+          <td style="color: var(--text-muted); font-size: 12px; white-space: nowrap;">${esc(formatDate(o.createdAt))}</td>
           <td>
             <strong style="color: var(--text-main);">${esc(o.receiver || 'Chưa có tên')}</strong><br>
             <span style="font-size: 12px; color: var(--text-muted);">${esc(o.phone || 'Chưa có SĐT')}</span>
@@ -463,11 +516,11 @@
           <td style="font-size: 12.5px; line-height: 1.45;">${itemsSummary}</td>
           <td>
             <strong style="color: var(--text-main);">${money(o.total)}</strong><br>
-            <small style="color: var(--text-muted);">${o.payment === 'COD' ? 'Thu hộ COD' : 'Trực tuyến'}</small>
+            <small style="color: var(--text-muted);">${o.paymentMethod === 'COD' ? 'Thu hộ COD' : 'Trực tuyến'}</small>
           </td>
-          <td>${getStatusBadgeHtml(o.status)}</td>
-          <td><span style="font-size: 12px; color: var(--text-muted);">${esc(o.shipStatus || 'Chờ bàn giao')}</span></td>
-          <td>${getPaymentBadgeHtml(o.paymentStatus || 'Chưa thanh toán')}</td>
+          <td>${getStatusBadgeHtml(o.orderStatus)}</td>
+          <td><span style="font-size: 12px; color: var(--text-muted);">${esc(o.shipment?.trackingCode || orderStatusText(o.orderStatus))}</span></td>
+          <td>${getPaymentBadgeHtml(o.paymentStatus)}</td>
           <td class="text-right">
             <button type="button" class="btn btn-outline btn-sm" data-action="open-order-detail" data-id="${esc(o.id)}">
               <span>Xử lý đơn</span>
@@ -493,21 +546,22 @@
 
   // Stepper trực quan cho Order Detail Drawer
   function buildOrderStepper(o) {
-    const isCancelled = o.status === 'Đã hủy';
-    const isFailFlow = ['Giao thất bại', 'Đang hoàn hàng', 'Đã hoàn hàng'].includes(o.status);
+    const st = o.orderStatus;
+    const isCancelled = st === 'cancelled';
+    const isFailFlow = ['delivery_failed', 'returning', 'returned'].includes(st);
 
     let step = 1;
-    if (o.status === 'Đã xác nhận') step = 2;
-    else if (o.status === 'Đang giao') step = 3;
-    else if (o.status === 'Đã giao') step = 4;
+    if (st === 'confirmed' || st === 'packing') step = 2;
+    else if (st === 'shipping') step = 3;
+    else if (st === 'delivered') step = 4;
 
     if (isCancelled || isFailFlow) {
       return `
         <div class="order-stepper">
           <div class="stepper-node done"><span class="stepper-dot">1</span><span>Tạo đơn</span></div>
           <div class="stepper-node ${isFailFlow ? 'done' : 'error'}"><span class="stepper-dot">2</span><span>Xác nhận</span></div>
-          <div class="stepper-node ${isFailFlow ? 'error' : ''}"><span class="stepper-dot">3</span><span>${isFailFlow ? esc(o.status) : 'Vận chuyển'}</span></div>
-          <div class="stepper-node ${o.status === 'Đã hoàn hàng' || isCancelled ? 'error' : ''}"><span class="stepper-dot">4</span><span>${isCancelled ? 'Đã hủy' : 'Hoàn kho'}</span></div>
+          <div class="stepper-node ${isFailFlow ? 'error' : ''}"><span class="stepper-dot">3</span><span>${isFailFlow ? esc(orderStatusText(st)) : 'Vận chuyển'}</span></div>
+          <div class="stepper-node ${st === 'returned' || isCancelled ? 'error' : ''}"><span class="stepper-dot">4</span><span>${isCancelled ? 'Đã hủy' : 'Hoàn kho'}</span></div>
         </div>
       `;
     }
@@ -524,30 +578,32 @@
     `;
   }
 
-  // ORDER DETAIL DRAWER (giữ nguyên 100% logic & ràng buộc nghiệp vụ)
+  // ORDER DETAIL DRAWER (Schema V2)
   function renderOrderDetail(orderId) {
     selectedOrderId = orderId;
     const o = (dbState.orders || []).find(x => x.id === orderId);
     const container = document.getElementById('order-drawer-container');
     if (!o || !container) return;
 
-    const subtotal = o.items.reduce((s, i) => s + (i.price * i.qty), 0);
-    const shippingFee = o.shippingFee ?? 30000;
+    const subtotal = o.subtotal ?? o.items.reduce((s, i) => s + ((i.unitPrice ?? i.price) * i.qty), 0);
+    const shippingFee = o.shippingFee ?? defaultShippingFee();
 
-    // Ràng buộc Bug 4.2: Đơn online thanh toán thất bại / chưa thanh toán không cho bàn giao
-    const isOnline = o.payment === 'online';
-    const isPaid = o.paymentStatus === 'Thanh toán thành công';
+    const isOnline = o.paymentMethod === 'online';
+    const isPaid = o.paymentStatus === 'paid';
     const canShip = !isOnline || isPaid;
 
-    // Kiểm tra điều kiện hoàn tiền (Bug 4.4)
-    const canRefund = o.refund === 'Chờ hoàn tiền';
+    const paidAmount = (o.transactions || []).filter(t => t.status === 'success').reduce((s, t) => s + t.amount, 0);
+    const refundedAmount = (o.refunds || []).filter(r => r.status === 'success').reduce((s, r) => s + r.amount, 0);
+    const refundableAmount = Math.max(0, paidAmount - refundedAmount);
+    const canRefund = refundableAmount > 0 && ['cancelled', 'returned'].includes(o.orderStatus);
 
     let actionControlsHtml = '';
+    const st = o.orderStatus;
 
-    if (o.status === 'Chờ xác nhận') {
+    if (st === 'pending') {
       actionControlsHtml = `
         <div class="action-buttons">
-          <button type="button" class="btn btn-primary" data-action="order-step" data-step="confirm" data-id="${esc(o.id)}">
+          <button type="button" class="btn btn-primary" data-action="order-step" data-step="confirmed" data-id="${esc(o.id)}">
             ${icons.check} Xác nhận đơn hàng
           </button>
           <button type="button" class="btn btn-danger" data-action="order-cancel" data-id="${esc(o.id)}">
@@ -555,11 +611,11 @@
           </button>
         </div>
       `;
-    } else if (o.status === 'Đã xác nhận') {
+    } else if (st === 'confirmed' || st === 'packing') {
       if (!canShip) {
         actionControlsHtml = `
           <div class="action-alert alert-danger">
-            <strong>CHẶN BÀN GIAO VẬN CHUYỂN:</strong> Đơn hàng thanh toán trực tuyến chưa hoàn tất thanh toán (Hiện tại: <strong>${esc(o.paymentStatus)}</strong>).
+            <strong>CHẶN BÀN GIAO VẬN CHUYỂN:</strong> Đơn hàng thanh toán trực tuyến chưa hoàn tất thanh toán (Hiện tại: <strong>${esc(paymentStatusText(o.paymentStatus))}</strong>).
             Theo quy định, chỉ bàn giao hàng cho đơn vị vận chuyển sau khi khách đã thanh toán thành công.
           </div>
           <div class="action-buttons">
@@ -574,7 +630,7 @@
       } else {
         actionControlsHtml = `
           <div class="action-buttons">
-            <button type="button" class="btn btn-primary" data-action="order-step" data-step="ship" data-id="${esc(o.id)}">
+            <button type="button" class="btn btn-primary" data-action="order-step" data-step="shipping" data-id="${esc(o.id)}">
               ${icons.truck} Bàn giao cho đơn vị vận chuyển
             </button>
             <button type="button" class="btn btn-danger" data-action="order-cancel" data-id="${esc(o.id)}">
@@ -583,7 +639,7 @@
           </div>
         `;
       }
-    } else if (o.status === 'Đang giao') {
+    } else if (st === 'shipping') {
       actionControlsHtml = `
         <div class="action-alert alert-warning">
           Đơn hàng đang trên đường vận chuyển tới khách hàng. Vui lòng cập nhật kết quả giao nhận bên dưới:
@@ -592,46 +648,46 @@
           <button type="button" class="btn btn-primary" data-action="order-step" data-step="delivered" data-id="${esc(o.id)}">
             ${icons.check} Giao hàng thành công
           </button>
-          <button type="button" class="btn btn-danger" data-action="order-step" data-step="failed" data-id="${esc(o.id)}">
+          <button type="button" class="btn btn-danger" data-action="order-step" data-step="delivery_failed" data-id="${esc(o.id)}">
             ${icons.x} Giao hàng thất bại
           </button>
         </div>
       `;
-    } else if (o.status === 'Giao thất bại') {
+    } else if (st === 'delivery_failed') {
       actionControlsHtml = `
         <div class="action-alert alert-danger">
           <strong>Đơn giao thất bại:</strong> Khách không nhận hàng hoặc không liên lạc được. Vui lòng chuyển sang quy trình hoàn hàng về kho.
         </div>
         <div class="action-buttons">
-          <button type="button" class="btn btn-primary" data-action="order-step" data-step="start-return" data-id="${esc(o.id)}">
+          <button type="button" class="btn btn-primary" data-action="order-step" data-step="returning" data-id="${esc(o.id)}">
             ${icons.rotate} Xác nhận hàng đang chuyển hoàn về kho
           </button>
         </div>
       `;
-    } else if (o.status === 'Đang hoàn hàng') {
+    } else if (st === 'returning') {
       actionControlsHtml = `
         <div class="action-alert alert-warning">
           <strong>Hàng đang chuyển hoàn:</strong> Đơn vị giao nhận đang chuyển trả kiện hàng về lại kho Việt Phục.
         </div>
         <div class="action-buttons">
-          <button type="button" class="btn btn-primary" data-action="order-step" data-step="restock-returned" data-id="${esc(o.id)}">
+          <button type="button" class="btn btn-primary" data-action="order-step" data-step="returned" data-id="${esc(o.id)}">
             ${icons.boxIn} Đã nhận lại hàng hoàn & Nhập kho
           </button>
         </div>
       `;
-    } else if (o.status === 'Đã hoàn hàng') {
+    } else if (st === 'returned') {
       actionControlsHtml = `
         <div class="action-alert alert-success">
           Đơn hàng đã được hoàn trả về kho và số lượng sản phẩm đã được cộng lại vào tồn khả dụng.
         </div>
       `;
-    } else if (o.status === 'Đã giao') {
+    } else if (st === 'delivered') {
       actionControlsHtml = `
         <div class="action-alert alert-success">
           Đơn hàng đã giao thành công tới khách hàng.
         </div>
       `;
-    } else if (o.status === 'Đã hủy') {
+    } else if (st === 'cancelled') {
       actionControlsHtml = `
         <div class="action-alert alert-warning">
           Đơn hàng đã bị hủy. Số lượng giữ hàng đã được giải phóng về kho.
@@ -639,56 +695,55 @@
       `;
     }
 
-    // Hoàn tiền Section
     let refundSectionHtml = '';
     if (canRefund) {
       refundSectionHtml = `
         <div class="drawer-section" style="border-color: var(--danger-border); background: var(--danger-bg);">
           <div class="drawer-section-title" style="color: var(--danger); border-bottom-color: var(--danger-border);">
-            <span>YÊU CẦU HOÀN TIỀN CHO KHÁCH</span>
-            <span class="payment-pill refunding">Chờ hoàn tiền</span>
+            <span>YÊU CẦU HOÀN TIỀN CHO KHÁCH (MÔ PHỎNG)</span>
+            <span class="payment-pill refunding">Có thể hoàn: ${money(refundableAmount)}</span>
           </div>
           <p style="font-size: 13px; margin-bottom: 12px; color: var(--text-main);">
-            Đơn hàng phát sinh hoàn trả hoặc hủy sau khi thanh toán. Số tiền cần hoàn: <strong>${money(o.total)}</strong>
+            Số tiền đã thanh toán còn lại có thể hoàn trả: <strong>${money(refundableAmount)}</strong>
           </p>
-          <button type="button" class="btn btn-danger-solid" data-action="order-refund" data-id="${esc(o.id)}">
-            ${icons.refund} Xác nhận đã hoàn tiền (${money(o.total)})
+          <button type="button" class="btn btn-danger-solid" data-action="order-refund" data-id="${esc(o.id)}" data-amount="${refundableAmount}">
+            ${icons.refund} Xác nhận đã hoàn tiền (${money(refundableAmount)})
           </button>
         </div>
       `;
-    } else if (o.refund === 'Đã hoàn tiền (mô phỏng)' || o.paymentStatus === 'Đã hoàn tiền' || o.paymentStatus === 'Đã hoàn toàn bộ') {
+    } else if (o.paymentStatus === 'refunded' || o.paymentStatus === 'partially_refunded') {
       refundSectionHtml = `
         <div class="drawer-section" style="border-color: var(--success-border); background: var(--success-bg);">
           <div class="drawer-section-title" style="color: var(--success); border-bottom-color: var(--success-border);">
             <span>TIẾN TRÌNH HOÀN TIỀN</span>
-            <span class="payment-pill paid">Đã hoàn tất</span>
+            <span class="payment-pill paid">${esc(paymentStatusText(o.paymentStatus))}</span>
           </div>
           <p style="font-size: 13px; color: var(--success);">
-            Đã hoàn tiền thành công số tiền <strong>${money(o.total)}</strong> cho khách hàng.
+            Đã hoàn tiền mô phỏng tổng cộng <strong>${money(refundedAmount)}</strong>.
           </p>
         </div>
       `;
     }
 
-    // Đổi trả Section nếu có
+    const ret = (dbState.returns || []).find(r => r.orderId === o.id);
     let returnSectionHtml = '';
-    if (o.returnStatus) {
+    if (ret) {
       returnSectionHtml = `
         <div class="drawer-section" style="border-color: var(--warning-border); background: var(--warning-bg);">
           <div class="drawer-section-title" style="color: var(--warning); border-bottom-color: var(--warning-border);">
             <span>YÊU CẦU ĐỔI TRẢ & KHIẾU NẠI</span>
-            ${getStatusBadgeHtml(o.returnStatus)}
+            ${getStatusBadgeHtml(ret.status)}
           </div>
           <div style="font-size: 13px; line-height: 1.6;">
-            <strong>Lý do từ khách hàng:</strong> ${esc(o.returnReason || 'Không có mô tả')}<br>
+            <strong>Lý do từ khách hàng:</strong> ${esc(ret.reason || 'Không có mô tả')}<br>
             <small style="color: var(--text-muted);">Quy định: Tiếp nhận yêu cầu trong vòng 7 ngày kể từ khi nhận hàng.</small>
           </div>
-          ${o.returnStatus !== 'Đã hoàn tất' && o.returnStatus !== 'Bị từ chối' ? `
+          ${ret.status !== 'completed' && ret.status !== 'rejected' ? `
             <div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px;">
-              <button type="button" class="btn btn-primary btn-sm" data-action="return-approve" data-id="${esc(o.id)}">
+              <button type="button" class="btn btn-primary btn-sm" data-action="return-approve" data-id="${esc(ret.id)}">
                 ${icons.check} Chấp thuận & Nhập lại hàng
               </button>
-              <button type="button" class="btn btn-outline btn-sm" data-action="return-reject" data-id="${esc(o.id)}">
+              <button type="button" class="btn btn-outline btn-sm" data-action="return-reject" data-id="${esc(ret.id)}">
                 ${icons.x} Từ chối yêu cầu
               </button>
             </div>
@@ -697,17 +752,17 @@
       `;
     }
 
-    // Render items
     const itemsHtml = o.items.map(i => {
-      const p = dbState.products.find(x => x.id === i.id) || {};
+      const p = dbState.products.find(x => x.id === i.productId) || {};
+      const unitPrice = i.unitPrice ?? i.price ?? 0;
       return `
         <div class="order-item-row">
-          <img src="${esc(p.img || 'assets/accessory.png')}" class="order-item-img" alt="${esc(i.name)}">
+          <img src="${esc(i.img || p.img || 'assets/accessory.png')}" class="order-item-img" alt="${esc(i.name)}">
           <div class="order-item-details">
             <div class="order-item-name">${esc(i.name)}</div>
-            <div class="order-item-meta">Màu: ${esc(i.color || p.color || 'Mặc định')} · Size: <strong>${esc(i.size)}</strong></div>
+            <div class="order-item-meta">SKU: <code>${esc(i.sku || 'N/A')}</code> · Màu: ${esc(i.color || 'Mặc định')} · Size: <strong>${esc(i.size)}</strong></div>
             <div style="font-size: 12.5px; margin-top: 4px; color: var(--text-main);">
-              ${money(i.price)} × <strong>${i.qty}</strong> = <strong>${money(i.price * i.qty)}</strong>
+              ${money(unitPrice)} × <strong>${i.qty}</strong> = <strong>${money(unitPrice * i.qty)}</strong>
             </div>
           </div>
         </div>
@@ -715,11 +770,10 @@
     }).join('');
 
     // Timeline history
-    const historyHtml = (o.history || []).map(h => `
-      <div class="timeline-item">
-        <span>${esc(h)}</span>
-      </div>
-    `).join('');
+    const historyHtml = (o.history || []).map(h => {
+      const text = typeof h === 'string' ? h : `${formatDate(h.at)} · ${h.note || orderStatusText(h.status)}`;
+      return `<div class="timeline-item"><span>${esc(text)}</span></div>`;
+    }).join('');
 
     container.innerHTML = `
       <div class="admin-modal-overlay" data-action="close-order-detail">
@@ -728,9 +782,9 @@
             <div>
               <h3>Đơn hàng ${esc(o.id)}</h3>
               <div class="drawer-header-meta">
-                <small style="color: var(--text-muted);">${esc(o.date)}</small>
-                ${getStatusBadgeHtml(o.status)}
-                ${getPaymentBadgeHtml(o.paymentStatus || 'Chưa thanh toán')}
+                <small style="color: var(--text-muted);">${esc(formatDate(o.createdAt))}</small>
+                ${getStatusBadgeHtml(o.orderStatus)}
+                ${getPaymentBadgeHtml(o.paymentStatus)}
               </div>
             </div>
             <button type="button" class="drawer-close" data-action="close-order-detail" title="Đóng (Esc)" aria-label="Đóng chi tiết đơn hàng">&times;</button>
@@ -763,12 +817,12 @@
                   <strong>${esc(o.address || 'Chưa cung cấp')}</strong>
                 </div>
                 <div class="info-item">
-                  <span>EMAIL TÀI KHOẢN</span>
-                  <span>${esc(o.email || 'Khách vãng lai')}</span>
+                  <span>KHÁCH HÀNG</span>
+                  <span>${esc(o.customerId || 'Đơn vãng lai / V1')}</span>
                 </div>
                 <div class="info-item">
                   <span>PHƯƠNG THỨC GIAO HÀNG</span>
-                  <span>${shippingFee === 45000 ? 'Giao hàng nhanh (45.000₫)' : 'Giao hàng tiêu chuẩn (30.000₫)'}</span>
+                  <span>${shippingFee === remoteShippingFee() ? `Giao hàng khu vực xa (${money(remoteShippingFee())})` : `Giao hàng cơ bản (${money(shippingFee)})`}</span>
                 </div>
               </div>
             </div>
@@ -790,8 +844,8 @@
                   <span style="color: var(--brand-burgundy); font-family: var(--font-serif); font-size: 17px;">${money(o.total)}</span>
                 </div>
                 <div style="margin-top: 10px; font-size: 12px; color: var(--text-muted);">
-                  Phương thức: <strong>${o.payment === 'COD' ? 'Thu tiền khi nhận hàng (COD mô phỏng)' : 'Chuyển khoản trực tuyến mô phỏng'}</strong>
-                  · Vận chuyển: <strong>${esc(o.shipStatus || 'Chờ bàn giao')}</strong>
+                  Phương thức: <strong>${o.paymentMethod === 'COD' ? 'Thu tiền khi nhận hàng (COD mô phỏng)' : 'Chuyển khoản trực tuyến mô phỏng'}</strong>
+                  · Đối soát: <strong>${esc(settlementText(o.settlementStatus))}</strong>
                 </div>
               </div>
             </div>
@@ -814,12 +868,12 @@
     if (container) container.innerHTML = '';
   }
 
-  // TAB 2: DASHBOARD (sử dụng 100% dữ liệu thật từ dbState)
+  // TAB 2: DASHBOARD (sử dụng 100% dữ liệu thật từ dbState V2)
   function renderDashboard() {
     const orders = dbState.orders || [];
     const totalOrders = orders.length;
-    const pendingOrders = orders.filter(o => o.status === 'Chờ xác nhận').length;
-    const deliveredOrders = orders.filter(o => o.status === 'Đã giao').length;
+    const pendingOrders = orders.filter(o => o.orderStatus === 'pending').length;
+    const deliveredOrders = orders.filter(o => o.orderStatus === 'delivered').length;
     const totalRevenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
 
     document.getElementById('dash-total-orders').textContent = totalOrders;
@@ -837,7 +891,6 @@
     const rate = visits > 0 ? ((totalOrders / visits) * 100).toFixed(1) + '%' : '0%';
     document.getElementById('dash-conversion-rate').textContent = rate;
 
-    // Thanh tiến trình phễu chuyển đổi thật
     const baseMax = Math.max(visits, cartEvents, totalOrders, 1);
     const setBar = (id, val) => {
       const el = document.getElementById(id);
@@ -848,7 +901,6 @@
     setBar('funnel-bar-orders', totalOrders);
     setBar('funnel-bar-delivered', deliveredOrders);
 
-    // Cơ cấu đơn hàng & thanh toán thật
     const breakdownBody = document.getElementById('dash-breakdown-body');
     if (breakdownBody) {
       if (!totalOrders) {
@@ -860,10 +912,10 @@
           </div>
         `;
       } else {
-        const codCount = orders.filter(o => o.payment === 'COD').length;
-        const onlineCount = orders.filter(o => o.payment === 'online').length;
-        const shippingCount = orders.filter(o => o.status === 'Đang giao' || o.status === 'Đã xác nhận').length;
-        const issueCount = orders.filter(o => ['Giao thất bại', 'Đang hoàn hàng', 'Đã hoàn hàng', 'Đã hủy'].includes(o.status)).length;
+        const codCount = orders.filter(o => o.paymentMethod === 'COD').length;
+        const onlineCount = orders.filter(o => o.paymentMethod === 'online').length;
+        const shippingCount = orders.filter(o => ['confirmed', 'packing', 'shipping'].includes(o.orderStatus)).length;
+        const issueCount = orders.filter(o => ['delivery_failed', 'returning', 'returned', 'cancelled'].includes(o.orderStatus)).length;
         const pct = count => Math.round((count / totalOrders) * 100);
 
         breakdownBody.innerHTML = `
@@ -902,11 +954,11 @@
       <tr>
         <td><span class="order-code">${esc(o.id)}</span></td>
         <td>
-          <strong>${esc(o.receiver || o.email || 'Khách hàng')}</strong>
+          <strong>${esc(o.receiver || 'Khách hàng')}</strong>
           ${o.phone ? `<br><small style="color: var(--text-muted);">${esc(o.phone)}</small>` : ''}
         </td>
         <td><strong>${money(o.total)}</strong></td>
-        <td>${getStatusBadgeHtml(o.status)}</td>
+        <td>${getStatusBadgeHtml(o.orderStatus)}</td>
         <td class="text-right">
           <button type="button" class="btn btn-outline btn-sm" data-action="open-order-detail" data-id="${esc(o.id)}">
             Chi tiết ${icons.arrowRight}
@@ -916,9 +968,9 @@
     `).join('');
   }
 
-  // TAB 3: RETURNS
+  // TAB 3: RETURNS (Schema V2: đọc từ dbState.returns)
   function renderReturnsTable() {
-    const returns = (dbState.orders || []).filter(o => o.returnStatus);
+    const returns = (dbState.returns || []).slice().reverse();
     const countEl = document.getElementById('returns-count-text');
     if (countEl) countEl.textContent = `${returns.length} yêu cầu`;
 
@@ -930,31 +982,32 @@
       return;
     }
 
-    tbody.innerHTML = returns.map(o => {
-      const itemsList = o.items.map(i => `${esc(i.name)} (${esc(i.size)}) × ${i.qty}`).join(', ');
-      const canProcess = o.returnStatus !== 'Đã hoàn tất' && o.returnStatus !== 'Bị từ chối';
+    tbody.innerHTML = returns.map(r => {
+      const o = (dbState.orders || []).find(x => x.id === r.orderId) || {};
+      const itemsList = (r.items || []).map(i => `${esc(i.sku || i.productId)} × ${i.qty}`).join(', ');
+      const canProcess = r.status !== 'completed' && r.status !== 'rejected';
       return `
         <tr>
-          <td><span class="order-code">${esc(o.id)}</span></td>
+          <td><span class="order-code">${esc(r.orderId)}</span></td>
           <td>
             <strong>${esc(o.receiver || 'Khách hàng')}</strong><br>
             <small style="color: var(--text-muted);">${esc(o.phone || '')}</small>
           </td>
           <td style="font-size: 12.5px;">${itemsList}</td>
-          <td style="max-width: 240px;">${esc(o.returnReason || 'Không có mô tả')}</td>
-          <td>${getStatusBadgeHtml(o.returnStatus)}</td>
-          <td>${getPaymentBadgeHtml(o.refund || 'Chưa hoàn')}</td>
+          <td style="max-width: 240px;">${esc(r.reason || 'Không có mô tả')}</td>
+          <td>${getStatusBadgeHtml(r.status)}</td>
+          <td>${getPaymentBadgeHtml(o.paymentStatus || 'unpaid')}</td>
           <td class="text-right">
             <div style="display:inline-flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
               ${canProcess ? `
-                <button type="button" class="btn btn-primary btn-sm" data-action="return-approve" data-id="${esc(o.id)}" title="Duyệt và nhập kho">
+                <button type="button" class="btn btn-primary btn-sm" data-action="return-approve" data-id="${esc(r.id)}" title="Duyệt và nhập kho">
                   ${icons.check} Duyệt
                 </button>
-                <button type="button" class="btn btn-danger btn-sm" data-action="return-reject" data-id="${esc(o.id)}" title="Từ chối yêu cầu">
+                <button type="button" class="btn btn-danger btn-sm" data-action="return-reject" data-id="${esc(r.id)}" title="Từ chối yêu cầu">
                   ${icons.x} Từ chối
                 </button>
               ` : ''}
-              <button type="button" class="btn btn-outline btn-sm" data-action="open-order-detail" data-id="${esc(o.id)}">
+              <button type="button" class="btn btn-outline btn-sm" data-action="open-order-detail" data-id="${esc(r.orderId)}">
                 Chi tiết
               </button>
             </div>
@@ -964,7 +1017,7 @@
     }).join('');
   }
 
-  // TAB 4: INVENTORY
+  // TAB 4: INVENTORY (Schema V2: đọc từ variants[].sku & state.stock[sku])
   function renderInventoryTable() {
     const products = dbState.products || [];
     const statusFilter = document.getElementById('filter-inventory-status')?.value || 'all';
@@ -972,8 +1025,8 @@
     if (!tbody) return;
 
     const rows = products.filter(p => {
-      const sizes = p.sizes || ['S', 'M', 'L', 'XL'];
-      const qtys = sizes.map(s => getAvailableStock(p.id, s));
+      const variants = p.variants || [];
+      const qtys = variants.map(v => getVariantStock(v.sku));
       if (statusFilter === 'low') return qtys.some(q => q > 0 && q < 3);
       if (statusFilter === 'out') return qtys.some(q => q === 0);
       return true;
@@ -985,25 +1038,28 @@
     }
 
     tbody.innerHTML = rows.map(p => {
-      const sizes = p.sizes || ['S', 'M', 'L', 'XL'];
+      const variants = p.variants || [];
       let totalStock = 0;
-      const sizeTags = sizes.map(s => {
-        const qty = getAvailableStock(p.id, s);
-        totalStock += qty;
-        const cls = qty === 0 ? 'out' : (qty < 3 ? 'low' : 'ok');
-        const note = qty === 0 ? ' · Hết' : (qty < 3 ? ' · Sắp hết' : '');
-        return `<span class="stock-chip ${cls}"><strong>${esc(s)}:</strong> ${qty}${note}</span>`;
-      }).join('');
+      const sizeTags = variants.length
+        ? variants.map(v => {
+            const qty = getVariantStock(v.sku);
+            totalStock += qty;
+            const cls = qty === 0 ? 'out' : (qty < 3 ? 'low' : 'ok');
+            const note = qty === 0 ? ' · Hết' : (qty < 3 ? ' · Sắp hết' : '');
+            return `<span class="stock-chip ${cls}" title="${esc(v.sku)}"><strong>${esc(v.size)}:</strong> ${qty}${note}</span>`;
+          }).join('')
+        : '<span class="stock-chip out">Chưa khai báo biến thể</span>';
+      const primaryColor = variants[0]?.color || 'Không rõ';
 
       return `
         <tr>
           <td><img src="${esc(p.img)}" class="product-thumb" alt="${esc(p.name)}"></td>
           <td><strong>${esc(p.name)}</strong><br><small style="color:var(--text-muted);">${esc(p.id)}</small></td>
-          <td>${esc(p.category)}</td>
+          <td>${esc(categoryNameOf(p))}</td>
           <td>
             <span class="color-chip">
-              <span class="color-chip-dot" style="background:${colorSwatches[p.color] || '#B99A62'}"></span>
-              ${esc(p.color)}
+              <span class="color-chip-dot" style="background:${colorSwatches[primaryColor] || '#B99A62'}"></span>
+              ${esc(primaryColor)}
             </span>
           </td>
           <td><div class="size-stock-list">${sizeTags}</div></td>
@@ -1018,7 +1074,7 @@
     const select = document.getElementById('filter-product-category');
     if (!select) return;
     const current = select.value || 'all';
-    const categories = [...new Set((dbState.products || []).map(p => p.category).filter(Boolean))];
+    const categories = (dbState.categories || []).map(c => c.name);
     select.innerHTML = `<option value="all">Tất cả danh mục</option>` +
       categories.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
     if ([...select.options].some(o => o.value === current)) select.value = current;
@@ -1032,9 +1088,11 @@
     if (!tbody) return;
 
     const filtered = products.filter(p => {
-      if (catFilter !== 'all' && p.category !== catFilter) return false;
+      const catName = categoryNameOf(p);
+      const colorText = [...new Set((p.variants || []).map(v => v.color))].join(', ');
+      if (catFilter !== 'all' && catName !== catFilter) return false;
       if (search) {
-        const hay = `${p.id} ${p.name} ${p.category} ${p.material} ${p.color}`.toLowerCase();
+        const hay = `${p.id} ${p.name} ${catName} ${p.material} ${colorText}`.toLowerCase();
         if (!hay.includes(search)) return false;
       }
       return true;
@@ -1046,17 +1104,19 @@
     }
 
     tbody.innerHTML = filtered.map(p => {
-      const sizes = p.sizes || ['S', 'M', 'L', 'XL'];
-      const totalStock = sizes.reduce((sum, s) => sum + getAvailableStock(p.id, s), 0);
+      const variants = p.variants || [];
+      const sizes = [...new Set(variants.map(v => v.size))];
+      const primaryColor = variants[0]?.color || 'Không rõ';
+      const totalStock = variants.reduce((sum, v) => sum + getVariantStock(v.sku), 0);
       return `
         <tr>
           <td><span class="order-code">${esc(p.id)}</span></td>
           <td><img src="${esc(p.img)}" class="product-thumb" alt="${esc(p.name)}"></td>
           <td>
             <strong>${esc(p.name)}</strong>
-            <br><small style="color: var(--text-muted);">Size: ${sizes.map(esc).join(', ')}</small>
+            <br><small style="color: var(--text-muted);">Size: ${sizes.length ? sizes.map(esc).join(', ') : 'Chưa có'}</small>
           </td>
-          <td>${esc(p.category)}</td>
+          <td>${esc(categoryNameOf(p))}</td>
           <td>
             <strong>${money(p.price)}</strong>
             ${p.old ? `<br><del style="font-size:11.5px; color:var(--text-muted);">${money(p.old)}</del>` : ''}
@@ -1064,8 +1124,8 @@
           <td>
             <div>${esc(p.material)}</div>
             <span class="color-chip" style="color: var(--text-muted); font-size: 12px;">
-              <span class="color-chip-dot" style="background:${colorSwatches[p.color] || '#B99A62'}"></span>
-              ${esc(p.color)}
+              <span class="color-chip-dot" style="background:${colorSwatches[primaryColor] || '#B99A62'}"></span>
+              ${esc(primaryColor)}
             </span>
           </td>
           <td><span class="badge" style="background: var(--bg-main); border: 1px solid var(--border); color: var(--text-main);">${esc(p.tag || 'Mặc định')}</span></td>
@@ -1075,17 +1135,17 @@
     }).join('');
   }
 
-  // TAB 6: RECONCILIATION (giữ nguyên công thức tính hiện tại)
+  // TAB 6: RECONCILIATION (Schema V2)
   function renderReconciliationTable() {
-    const codOrders = (dbState.orders || []).filter(o => o.payment === 'COD' && o.status === 'Đã giao');
+    const codOrders = (dbState.orders || []).filter(o => o.paymentMethod === 'COD' && o.orderStatus === 'delivered');
     const summaryEl = document.getElementById('reconciliation-summary');
     const tbody = document.getElementById('reconciliation-table-body');
     if (!tbody) return;
 
     const totalCod = codOrders.reduce((s, o) => s + (o.total || 0), 0);
-    const totalShip = codOrders.reduce((s, o) => s + (o.shippingFee ?? 30000), 0);
-    const totalActual = codOrders.reduce((s, o) => s + Math.max(0, (o.total || 0) - (o.shippingFee ?? 30000)), 0);
-    const unsettledCount = codOrders.filter(o => o.settlement !== 'Đã thực nhận tiền (mô phỏng)').length;
+    const totalShip = codOrders.reduce((s, o) => s + (o.shippingFee ?? defaultShippingFee()), 0);
+    const totalActual = codOrders.reduce((s, o) => s + Math.max(0, (o.total || 0) - (o.shippingFee ?? defaultShippingFee())), 0);
+    const unsettledCount = codOrders.filter(o => o.settlementStatus !== 'settled').length;
 
     if (summaryEl) {
       summaryEl.innerHTML = `
@@ -1100,14 +1160,14 @@
           <div class="stat-sub">Khấu trừ từ tiền thu hộ</div>
         </div>
         <div class="stat-card">
-          <div class="stat-top"><span class="stat-label">Thực nhận về shop</span></div>
+          <div class="stat-top"><span class="stat-label">Thực nhận dự kiến</span></div>
           <div class="stat-value" style="color: var(--success);">${money(totalActual)}</div>
-          <div class="stat-sub">Công thức: Thu hộ − Phí ship</div>
+          <div class="stat-sub">Công thức mô phỏng: Thu hộ − Phí ship</div>
         </div>
         <div class="stat-card">
           <div class="stat-top"><span class="stat-label">Chờ đối soát</span></div>
           <div class="stat-value" style="color: var(--warning);">${unsettledCount}</div>
-          <div class="stat-sub">Đơn chưa xác nhận thực nhận</div>
+          <div class="stat-sub">Đơn chưa xác nhận đối soát</div>
         </div>
       `;
     }
@@ -1118,9 +1178,9 @@
     }
 
     tbody.innerHTML = codOrders.map(o => {
-      const shipFee = o.shippingFee ?? 30000;
+      const shipFee = o.shippingFee ?? defaultShippingFee();
       const actualReceived = Math.max(0, o.total - shipFee);
-      const isSettled = o.settlement === 'Đã thực nhận tiền (mô phỏng)';
+      const isSettled = o.settlementStatus === 'settled';
       return `
         <tr>
           <td><span class="order-code">${esc(o.id)}</span></td>
@@ -1133,13 +1193,13 @@
           <td class="text-right"><strong style="color: var(--success); font-size: 14px;">${money(actualReceived)}</strong></td>
           <td>
             <span class="status-pill ${isSettled ? 'delivered' : 'pending'}">
-              ${isSettled ? 'Đã đối soát' : 'Chưa đối soát'}
+              ${esc(settlementText(o.settlementStatus))}
             </span>
           </td>
           <td class="text-right">
             ${!isSettled ? `
               <button type="button" class="btn btn-primary btn-sm" data-action="order-settle" data-id="${esc(o.id)}">
-                ${icons.check} Xác nhận đã nhận tiền
+                ${icons.check} Xác nhận đối soát
               </button>
             ` : '<span style="color: var(--text-muted); font-size: 12px;">Đã hoàn tất</span>'}
           </td>
@@ -1245,10 +1305,10 @@
         return;
       }
 
-      // Xử lý các bước đơn hàng
+      // Xử lý các bước đơn hàng qua Admin API
       if (action === 'order-step') {
         const step = el.dataset.step;
-        if (step === 'failed') {
+        if (step === 'delivery_failed') {
           const ok = await showConfirmDialog({
             title: 'Xác nhận giao thất bại',
             message: `Đánh dấu đơn hàng ${orderId} giao không thành công để chuyển sang quy trình hoàn hàng?`,
@@ -1260,47 +1320,7 @@
 
         el.classList.add('is-loading');
         try {
-          await commitDatabase(state => {
-            const o = state.orders.find(x => x.id === orderId);
-            if (!o) throw new Error('Không tìm thấy đơn hàng.');
-
-            if (step === 'confirm' && o.status === 'Chờ xác nhận') {
-              o.status = 'Đã xác nhận';
-              o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Admin đã xác nhận đơn`);
-            } else if (step === 'ship' && o.status === 'Đã xác nhận') {
-              if (o.payment === 'online' && o.paymentStatus !== 'Thanh toán thành công') {
-                throw new Error('Chặn thao tác: Đơn hàng thanh toán trực tuyến chưa hoàn tất thanh toán.');
-              }
-              o.status = 'Đang giao';
-              o.shipStatus = 'Đang vận chuyển';
-              o.inventory = 'issued';
-              o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Bàn giao cho đơn vị vận chuyển`);
-            } else if (step === 'delivered' && o.status === 'Đang giao') {
-              o.status = 'Đã giao';
-              o.shipStatus = 'Giao thành công';
-              if (o.payment === 'COD') o.paymentStatus = 'Thanh toán thành công';
-              o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Giao hàng thành công cho người nhận`);
-            } else if (step === 'failed' && o.status === 'Đang giao') {
-              o.status = 'Giao thất bại';
-              o.shipStatus = 'Giao thất bại';
-              o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Giao hàng thất bại (khách vắng mặt / từ chối)`);
-            } else if (step === 'start-return' && o.status === 'Giao thất bại') {
-              o.status = 'Đang hoàn hàng';
-              o.shipStatus = 'Đang chuyển hoàn';
-              o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Bắt đầu quy trình chuyển kiện hàng hoàn về kho`);
-            } else if (step === 'restock-returned' && o.status === 'Đang hoàn hàng') {
-              o.items.forEach(i => modifyStock(i.id, i.size, i.qty));
-              o.status = 'Đã hoàn hàng';
-              o.shipStatus = 'Đã nhận hàng hoàn';
-              o.inventory = 'returned';
-              if (o.paymentStatus === 'Thanh toán thành công') {
-                o.refund = 'Chờ hoàn tiền';
-              }
-              o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Đã nhận lại hàng hoàn về kho và cập nhật số lượng tồn khả dụng`);
-            } else {
-              throw new Error('Trạng thái đơn hàng không hợp lệ cho thao tác này.');
-            }
-          });
+          await adminActionRequest('PATCH', `/api/admin/orders/${encodeURIComponent(orderId)}/status`, { nextStatus: step });
           showToast('Đã cập nhật trạng thái đơn hàng!', 'success');
         } catch (err) {
           showToast(err.message, 'danger');
@@ -1322,20 +1342,7 @@
 
         el.classList.add('is-loading');
         try {
-          await commitDatabase(state => {
-            const o = state.orders.find(x => x.id === orderId);
-            if (!o) throw new Error('Không tìm thấy đơn hàng.');
-            if (o.status === 'Đã hủy') throw new Error('Đơn hàng đã được hủy trước đó.');
-            if (o.inventory === 'reserved') {
-              o.items.forEach(i => modifyStock(i.id, i.size, i.qty));
-              o.inventory = 'released';
-            }
-            o.status = 'Đã hủy';
-            if (o.paymentStatus === 'Thanh toán thành công') {
-              o.refund = 'Chờ hoàn tiền';
-            }
-            o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Admin hủy đơn và giải phóng tồn kho`);
-          });
+          await adminActionRequest('PATCH', `/api/admin/orders/${encodeURIComponent(orderId)}/status`, { nextStatus: 'cancelled' });
           showToast('Đã hủy đơn hàng và hoàn lại số lượng tồn kho.', 'success');
         } catch (err) {
           showToast(err.message, 'danger');
@@ -1347,6 +1354,7 @@
 
       // Hoàn tiền (Refund)
       if (action === 'order-refund') {
+        const amount = Number(el.dataset.amount) || undefined;
         const ok = await showConfirmDialog({
           title: 'Xác nhận hoàn tiền',
           message: `Xác nhận đã hoàn tất hoàn tiền mô phỏng cho đơn hàng ${orderId}?`,
@@ -1357,13 +1365,7 @@
 
         el.classList.add('is-loading');
         try {
-          await commitDatabase(state => {
-            const o = state.orders.find(x => x.id === orderId);
-            if (!o) throw new Error('Không tìm thấy đơn hàng.');
-            o.refund = 'Đã hoàn tiền (mô phỏng)';
-            o.paymentStatus = 'Đã hoàn tiền';
-            o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Admin xác nhận đã hoàn tiền ${money(o.total)} cho khách hàng`);
-          });
+          await adminActionRequest('POST', `/api/admin/orders/${encodeURIComponent(orderId)}/refund`, { amount });
           showToast('Đã xác nhận hoàn tiền thành công!', 'success');
         } catch (err) {
           showToast(err.message, 'danger');
@@ -1377,24 +1379,14 @@
       if (action === 'return-approve') {
         const ok = await showConfirmDialog({
           title: 'Chấp thuận đổi trả',
-          message: `Xác nhận duyệt yêu cầu đổi trả cho đơn ${orderId}, nhập lại hàng vào kho và chuyển sang chờ hoàn tiền?`,
+          message: `Xác nhận duyệt yêu cầu đổi trả ${orderId} và nhập lại hàng vào kho?`,
           confirmText: 'Duyệt đổi trả'
         });
         if (!ok) return;
 
         el.classList.add('is-loading');
         try {
-          await commitDatabase(state => {
-            const o = state.orders.find(x => x.id === orderId);
-            if (!o) throw new Error('Không tìm thấy đơn hàng.');
-            if (o.inventory === 'issued') {
-              o.items.forEach(i => modifyStock(i.id, i.size, i.qty));
-              o.inventory = 'returned';
-            }
-            o.returnStatus = 'Đã hoàn tất';
-            o.refund = 'Chờ hoàn tiền';
-            o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Chấp thuận đổi trả, đã nhận lại hàng và hoàn tồn kho`);
-          });
+          await adminActionRequest('PATCH', `/api/admin/returns/${encodeURIComponent(orderId)}`, { action: 'approve' });
           showToast('Đã chấp thuận yêu cầu đổi trả và cập nhật kho hàng.', 'success');
         } catch (err) {
           showToast(err.message, 'danger');
@@ -1407,7 +1399,7 @@
       if (action === 'return-reject') {
         const reason = await showPromptDialog({
           title: 'Từ chối yêu cầu đổi trả',
-          message: `Nhập lý do từ chối yêu cầu đổi trả cho đơn ${orderId}:`,
+          message: `Nhập lý do từ chối yêu cầu đổi trả ${orderId}:`,
           placeholder: 'Ví dụ: Quá thời hạn 7 ngày hoặc sản phẩm đã qua sử dụng',
           defaultValue: 'Không thỏa mãn điều kiện chính sách 7 ngày',
           confirmText: 'Xác nhận từ chối'
@@ -1416,12 +1408,7 @@
 
         el.classList.add('is-loading');
         try {
-          await commitDatabase(state => {
-            const o = state.orders.find(x => x.id === orderId);
-            if (!o) throw new Error('Không tìm thấy đơn hàng.');
-            o.returnStatus = 'Bị từ chối';
-            o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Từ chối đổi trả: ${reason}`);
-          });
+          await adminActionRequest('PATCH', `/api/admin/returns/${encodeURIComponent(orderId)}`, { action: 'reject', note: reason });
           showToast('Đã từ chối yêu cầu đổi trả.', 'info');
         } catch (err) {
           showToast(err.message, 'danger');
@@ -1435,19 +1422,14 @@
       if (action === 'order-settle') {
         const ok = await showConfirmDialog({
           title: 'Xác nhận đối soát COD',
-          message: `Ghi nhận cửa hàng đã thực nhận tiền thu hộ cho đơn ${orderId}?`,
-          confirmText: 'Xác nhận đã nhận tiền'
+          message: `Ghi nhận đã đối soát mô phỏng cho đơn ${orderId}?`,
+          confirmText: 'Xác nhận đối soát'
         });
         if (!ok) return;
 
         el.classList.add('is-loading');
         try {
-          await commitDatabase(state => {
-            const o = state.orders.find(x => x.id === orderId);
-            if (!o) throw new Error('Không tìm thấy đơn hàng.');
-            o.settlement = 'Đã thực nhận tiền (mô phỏng)';
-            o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Đã chốt đối soát COD và thực nhận tiền`);
-          });
+          await adminActionRequest('POST', `/api/admin/orders/${encodeURIComponent(orderId)}/settle`, {});
           showToast('Đã ghi nhận đối soát COD thành công!', 'success');
         } catch (err) {
           showToast(err.message, 'danger');

@@ -1,10 +1,13 @@
 'use strict';
 
-// Máy chủ chỉ phục vụ bản demo cục bộ; không dùng cho dữ liệu hoặc giao dịch thật.
+// Máy chủ phục vụ đồ án Việt Phục (chạy local đơn tiến trình với dữ liệu JSON).
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+
+const { validateDatabaseV2 } = require('./schemas/database.schema');
+const { migrateDatabaseFile } = require('./migrations/migrate-v1-to-v2');
 
 const root = path.join(__dirname, 'dist');
 const dataDir = path.resolve(process.env.VIETPHUC_DATA_DIR || path.join(__dirname, 'data'));
@@ -16,151 +19,372 @@ if (!/^\d+$/.test(portText) || !Number.isInteger(port) || port < 0 || port > 655
   throw new Error('PORT phải là một số từ 0 đến 65535.');
 }
 const MAX_BODY = 2 * 1024 * 1024;
-const seedProducts = JSON.parse(fs.readFileSync(path.join(__dirname, 'seed-products.json'), 'utf8'));
-const empty = () => ({ revision: 0, state: { products: structuredClone(seedProducts), orders: [], stock: {}, visits: 0, cartEvents: 0 } });
+const DEMO_INITIAL_STOCK = 10;
 
-// Cấu hình tài khoản Admin bảo mật với node:crypto
-const ADMIN_SALT = 'vp_salt_admin_2026';
-// Băm scrypt cho mật khẩu mặc định "admin123"
-const ADMIN_HASH = '0d4dc578c21856726172a8874dc35c65879cf9204b6691ee3b4912c34b02ee01acea006025211ed29b9bad22e47e3ee07aeeabd084c58f20121c857700e5edd3';
-const ADMIN_USERNAME = 'admin';
+const seedData = JSON.parse(fs.readFileSync(path.join(__dirname, 'seed-products.json'), 'utf8'));
 
-function verifyAdminPassword(password) {
+function buildEmptyDatabaseV2() {
+  const stock = {};
+  for (const p of seedData.products) {
+    for (const v of p.variants) {
+      stock[v.sku] = DEMO_INITIAL_STOCK;
+    }
+  }
+  return {
+    schemaVersion: 2,
+    revision: 0,
+    state: {
+      categories: structuredClone(seedData.categories),
+      products: structuredClone(seedData.products),
+      stock,
+      inventoryLogs: [],
+      customers: [],
+      supportTickets: [],
+      orders: [],
+      returns: [],
+      promotions: [],
+      policies: structuredClone(seedData.policies),
+      policyVersions: [],
+      adminActivityLogs: [],
+      visits: 0,
+      cartEvents: 0,
+    },
+  };
+}
+
+// =========================================================
+// CẤU HÌNH NGHIỆP VỤ TẬP TRUNG (BUSINESS_CONFIG)
+// =========================================================
+const BUSINESS_CONFIG = Object.freeze({
+  shipping: Object.freeze({
+    standardFee: Number(process.env.VIETPHUC_SHIPPING_STANDARD || 30000),
+    remoteFee: Number(process.env.VIETPHUC_SHIPPING_REMOTE || 45000),
+  }),
+  codFee: Number(process.env.VIETPHUC_COD_FEE || 0),
+  paymentFee: Number(process.env.VIETPHUC_PAYMENT_FEE || 0),
+  onlineStockHoldMinutes: Number(process.env.VIETPHUC_ONLINE_HOLD_MINUTES || 15),
+  returnWindowDays: Number(process.env.VIETPHUC_RETURN_WINDOW_DAYS || 7),
+  maxPromotionsPerOrder: 1,
+});
+
+// =========================================================
+// XÁC THỰC ADMIN & CUSTOMER ĐỘC LẬP (KHÔNG HARDCODE MẬT KHẨU)
+// =========================================================
+const adminConfigPath = path.join(dataDir, 'admin.json');
+
+function loadAdminCredentials() {
+  const envUser = process.env.VIETPHUC_ADMIN_USER;
+  const envPass = process.env.VIETPHUC_ADMIN_PASSWORD;
+  const envHash = process.env.VIETPHUC_ADMIN_PASSWORD_HASH;
+  const envSalt = process.env.VIETPHUC_ADMIN_SALT;
+
+  if (envUser && envHash && envSalt) {
+    return { username: envUser, salt: envSalt, hash: envHash };
+  }
+  if (envUser && envPass) {
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.scryptSync(envPass, salt, 64).toString('hex');
+    return { username: envUser, salt, hash };
+  }
+  if (envPass && !envUser) {
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.scryptSync(envPass, salt, 64).toString('hex');
+    return { username: 'admin', salt, hash };
+  }
+  if (fs.existsSync(adminConfigPath)) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(adminConfigPath, 'utf8'));
+      if (cfg && typeof cfg.username === 'string' && typeof cfg.salt === 'string' && typeof cfg.hash === 'string') {
+        return { username: cfg.username, salt: cfg.salt, hash: cfg.hash };
+      }
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function verifyAdminPassword(password, creds) {
+  if (!creds || typeof password !== 'string') return false;
   try {
-    const hash = crypto.scryptSync(password, ADMIN_SALT, 64);
-    const expected = Buffer.from(ADMIN_HASH, 'hex');
+    const hash = crypto.scryptSync(password, creds.salt, 64);
+    const expected = Buffer.from(creds.hash, 'hex');
     return hash.length === expected.length && crypto.timingSafeEqual(hash, expected);
   } catch {
     return false;
   }
 }
 
-// Bộ nhớ phiên làm việc của Admin (Session Storage)
+// Kho phiên làm việc tách biệt hoàn toàn
 const adminSessions = new Map();
+const customerSessions = new Map();
+const loginAttempts = new Map(); // Rate limit theo IP
+
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+const IDLE_TTL_MS = 2 * 60 * 60 * 1000;
+
+function parseCookies(req) {
+  const out = {};
+  const header = req.headers.cookie || '';
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx > 0) {
+      out[part.slice(0, idx).trim()] = part.slice(idx + 1).trim();
+    }
+  }
+  return out;
+}
 
 function getAdminSession(req) {
-  const cookieHeader = req.headers.cookie || '';
-  const match = cookieHeader.match(/(?:^|;\s*)vp_admin_session=([^;]+)/);
-  if (!match) return null;
-  const token = match[1];
-  const session = adminSessions.get(token);
-  if (!session) return null;
-  if (Date.now() > session.expiresAt) {
+  const token = parseCookies(req).vp_admin_session;
+  if (!token) return null;
+  const s = adminSessions.get(token);
+  if (!s) return null;
+  const now = Date.now();
+  if (now > s.expiresAt || now - s.lastActiveAt > IDLE_TTL_MS) {
     adminSessions.delete(token);
     return null;
   }
-  return { token, ...session };
+  s.lastActiveAt = now;
+  return { token, ...s };
 }
 
-function validState(state) {
-  if (!state || typeof state !== 'object' || Array.isArray(state)) return false;
-
-  // 5 trường bắt buộc cốt lõi
-  const requiredKeys = ['cartEvents', 'orders', 'products', 'stock', 'visits'];
-  for (const k of requiredKeys) {
-    if (!(k in state)) return false;
+function getCustomerSession(req) {
+  const token = parseCookies(req).vp_customer_session;
+  if (!token) return null;
+  const s = customerSessions.get(token);
+  if (!s) return null;
+  const now = Date.now();
+  if (now > s.expiresAt || now - s.lastActiveAt > IDLE_TTL_MS) {
+    customerSessions.delete(token);
+    return null;
   }
-
-  // Danh sách trường cho phép mở rộng (categories, policies, inventoryLogs)
-  const allowedKeys = new Set([...requiredKeys, 'categories', 'policies', 'inventoryLogs']);
-  for (const k of Object.keys(state)) {
-    if (!allowedKeys.has(k)) return false;
-  }
-
-  if (!Array.isArray(state.products) || state.products.length > 10000) return false;
-  const productIds = new Set();
-  for (const p of state.products) {
-    if (!p || typeof p !== 'object' || Array.isArray(p) || typeof p.id !== 'string' || !/^[a-zA-Z0-9_-]{1,50}$/.test(p.id) || productIds.has(p.id)) return false;
-    if (![p.name,p.category,p.color,p.material,p.tag,p.img,p.addedAt].every(x=>typeof x === 'string' && x.length > 0 && x.length <= 500)) return false;
-    if (!Number.isSafeInteger(p.price) || p.price < 0 || (p.old !== undefined && (!Number.isSafeInteger(p.old) || p.old < 0))) return false;
-    if (p.sizes !== undefined && (!Array.isArray(p.sizes) || p.sizes.length < 1 || p.sizes.length > 30 || !p.sizes.every(s=>typeof s==='string' && /^[a-zA-Z0-9 _-]{1,50}$/.test(s)))) return false;
-    productIds.add(p.id);
-  }
-  if (!Array.isArray(state.orders) || state.orders.length > 10000) return false;
-  const ids = new Set();
-  for (const order of state.orders) {
-    if (!order || typeof order !== 'object' || Array.isArray(order) || typeof order.id !== 'string' || order.id.length < 1 || order.id.length > 100 || !Array.isArray(order.items) || order.items.length > 1000 || ids.has(order.id)) return false;
-    ids.add(order.id);
-  }
-  if (!state.stock || typeof state.stock !== 'object' || Array.isArray(state.stock) || Object.keys(state.stock).length > 10000) return false;
-  if (!Object.entries(state.stock).every(([key, n]) => /^[a-zA-Z0-9_-]+\|[a-zA-Z0-9 _-]+$/.test(key) && key.length <= 100 && Number.isSafeInteger(n) && n >= 0)) return false;
-
-  if (!Number.isSafeInteger(state.visits) || state.visits < 0 || !Number.isSafeInteger(state.cartEvents) || state.cartEvents < 0) return false;
-
-  // Kiểm tra tính hợp lệ của các trường mở rộng nếu có mặt
-  if (state.categories !== undefined) {
-    if (!Array.isArray(state.categories) || state.categories.length > 100 || !state.categories.every(c => typeof c === 'string' && c.length > 0 && c.length <= 100)) return false;
-  }
-  if (state.policies !== undefined) {
-    if (typeof state.policies !== 'object' || Array.isArray(state.policies)) return false;
-  }
-  if (state.inventoryLogs !== undefined) {
-    if (!Array.isArray(state.inventoryLogs) || state.inventoryLogs.length > 20000) return false;
-  }
-
-  return true;
+  s.lastActiveAt = now;
+  return { token, ...s };
 }
 
-function validateDatabase(data) {
-  return data && typeof data === 'object' && Number.isSafeInteger(data.revision) && data.revision >= 0 && validState(data.state);
+function checkLoginRateLimit(key) {
+  const now = Date.now();
+  const entry = loginAttempts.get(key);
+  if (!entry) return true;
+  if (now > entry.resetAt) {
+    loginAttempts.delete(key);
+    return true;
+  }
+  return entry.count < 5;
 }
 
+function recordLoginFailure(key) {
+  const now = Date.now();
+  const entry = loginAttempts.get(key);
+  if (!entry || now > entry.resetAt) {
+    loginAttempts.set(key, { count: 1, resetAt: now + 5 * 60 * 1000 });
+  } else {
+    entry.count += 1;
+  }
+}
+
+function clearLoginFailures(key) {
+  loginAttempts.delete(key);
+}
+
+// =========================================================
+// ĐỌC / GHI DATABASE NGUYÊN TỬ & TRANSACTION QUEUE
+// =========================================================
 function writeDatabase(data) {
-  // Tệp tạm nằm cùng thư mục để rename là thao tác thay thế nguyên vẹn.
   const temp = path.join(dataDir, `.database-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`);
   try {
     const fd = fs.openSync(temp, 'wx', 0o600);
     try {
       fs.writeFileSync(fd, JSON.stringify(data, null, 2) + '\n', 'utf8');
       fs.fsyncSync(fd);
-    } finally { fs.closeSync(fd); }
+    } finally {
+      fs.closeSync(fd);
+    }
     fs.renameSync(temp, databasePath);
   } finally {
-    try { fs.unlinkSync(temp); } catch (err) { if (err.code !== 'ENOENT') console.error('Không thể dọn tệp tạm:', err.message); }
+    try {
+      fs.unlinkSync(temp);
+    } catch (err) {
+      if (err.code !== 'ENOENT') console.error('Không thể dọn tệp tạm:', err.message);
+    }
   }
 }
 
 fs.mkdirSync(dataDir, { recursive: true });
 let database;
 try {
-  database = JSON.parse(fs.readFileSync(databasePath, 'utf8'));
-  if (!validateDatabase(database)) throw new Error('Sai cấu trúc cơ sở dữ liệu.');
-} catch (err) {
-  if (err.code !== 'ENOENT') {
-    console.error(`Không thể đọc ${databasePath}. Giữ nguyên tệp để kiểm tra: ${err.message}`);
-    process.exit(1);
+  if (!fs.existsSync(databasePath)) {
+    database = buildEmptyDatabaseV2();
+    const check = validateDatabaseV2(database);
+    if (!check.valid) throw new Error('Seed V2 không hợp lệ: ' + JSON.stringify(check.errors));
+    writeDatabase(database);
+  } else {
+    const current = JSON.parse(fs.readFileSync(databasePath, 'utf8'));
+    if (current.schemaVersion !== 2) {
+      const mig = migrateDatabaseFile(databasePath, seedData.policies);
+      database = mig.data;
+      console.log(`Đã migration V1 -> V2 thành công. Backup: ${mig.backupPath}`);
+    } else {
+      database = current;
+    }
+    const check = validateDatabaseV2(database);
+    if (!check.valid) {
+      throw new Error('Sai cấu trúc Schema V2: ' + check.errors.map(e => `${e.path}: ${e.message}`).join('; '));
+    }
   }
-  database = empty();
-  writeDatabase(database);
+} catch (err) {
+  console.error(`Không thể khởi tạo ${databasePath}: ${err.message}`);
+  process.exit(1);
 }
 
-const mime = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8', '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.svg':'image/svg+xml', '.ico':'image/x-icon', '.webp':'image/webp' };
+// Hàng đợi ghi tuần tự trong tiến trình Node.js
+let writeQueue = Promise.resolve();
+
+function runTransaction(expectedRevision, mutateFn) {
+  const task = writeQueue.then(() => {
+    if (expectedRevision !== undefined && expectedRevision !== null) {
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+        const err = new Error('Revision không hợp lệ.');
+        err.statusCode = 400;
+        err.code = 'invalid_revision';
+        throw err;
+      }
+      if (expectedRevision !== database.revision) {
+        const err = new Error('Dữ liệu vừa được thay đổi ở phiên khác.');
+        err.statusCode = 409;
+        err.code = 'conflict';
+        throw err;
+      }
+    }
+
+    const draftState = structuredClone(database.state);
+    const result = mutateFn(draftState);
+
+    const next = {
+      schemaVersion: 2,
+      revision: database.revision + 1,
+      state: draftState,
+    };
+
+    const validation = validateDatabaseV2(next);
+    if (!validation.valid) {
+      const err = new Error('Dữ liệu sau cập nhật không hợp lệ: ' + validation.errors.map(e => `${e.path}: ${e.message}`).join('; '));
+      err.statusCode = 400;
+      err.code = 'invalid_state';
+      throw err;
+    }
+
+    writeDatabase(next);
+    database = next;
+    return { revision: database.revision, state: database.state, result };
+  });
+
+  // Giữ queue sống kể cả khi 1 transaction lỗi
+  writeQueue = task.catch(() => {});
+  return task;
+}
+
+// =========================================================
+// HTTP HELPERS & SECURITY MIDDLEWARE
+// =========================================================
+const mime = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.webp': 'image/webp',
+};
+
 function sendJson(res, code, value, headers = {}) {
   res.writeHead(code, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff',
-    ...headers
+    ...headers,
   });
   res.end(JSON.stringify(value));
 }
 
-function sameOrigin(req) {
-  if (!req.headers.origin) return true;
+function isSameOriginUrl(rawUrl, hostHeader) {
   try {
-    const origin = new URL(req.headers.origin);
-    return origin.protocol === 'http:' && (origin.hostname === '127.0.0.1' || origin.hostname === 'localhost') && origin.host === req.headers.host;
-  } catch { return false; }
+    const u = new URL(rawUrl);
+    return (u.protocol === 'http:' || u.protocol === 'https:') &&
+      (u.hostname === '127.0.0.1' || u.hostname === 'localhost') &&
+      u.host === hostHeader;
+  } catch {
+    return false;
+  }
+}
+
+function isTrustedWriteRequest(req) {
+  // Bắt buộc custom header cho mọi request thay đổi dữ liệu
+  if (req.headers['x-vp-requested'] !== '1') return false;
+  const hostHeader = req.headers.host;
+  if (req.headers.origin) {
+    return isSameOriginUrl(req.headers.origin, hostHeader);
+  }
+  if (req.headers.referer) {
+    return isSameOriginUrl(req.headers.referer, hostHeader);
+  }
+  // Khi thiếu cả Origin lẫn Referer: chỉ cho phép khi đã có X-VP-Requested: 1 (đã check ở trên)
+  return true;
+}
+
+function verifyWriteRequest(req, res, requireJson = true) {
+  if (!isTrustedWriteRequest(req)) {
+    sendJson(res, 403, { error: 'forbidden_csrf' });
+    return false;
+  }
+  if (requireJson && !/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] || '')) {
+    sendJson(res, 415, { error: 'json_required' });
+    return false;
+  }
+  return true;
+}
+
+function requireAdmin(req, res) {
+  const session = getAdminSession(req);
+  if (!session) {
+    sendJson(res, 401, { error: 'unauthorized', message: 'Yêu cầu đăng nhập quản trị.' });
+    return null;
+  }
+  return session;
+}
+
+function requireCustomer(req, res) {
+  const session = getCustomerSession(req);
+  if (!session) {
+    sendJson(res, 401, { error: 'customer_unauthorized', message: 'Vui lòng đăng nhập tài khoản khách hàng.' });
+    return null;
+  }
+  const customer = database.state.customers.find(c => c.id === session.customerId);
+  if (!customer || customer.locked) {
+    customerSessions.delete(session.token);
+    sendJson(res, 403, { error: 'account_locked', message: 'Tài khoản khách hàng đã bị khóa hoặc không tồn tại.' });
+    return null;
+  }
+  return { session, customer };
 }
 
 function parseJsonBody(req, callback) {
   let chunks = [], size = 0, tooLarge = false;
   req.on('data', chunk => {
     size += chunk.length;
-    if (size > MAX_BODY) { tooLarge = true; chunks = []; } else if (!tooLarge) chunks.push(chunk);
+    if (size > MAX_BODY) {
+      tooLarge = true;
+      chunks = [];
+    } else if (!tooLarge) {
+      chunks.push(chunk);
+    }
   });
   req.on('end', () => {
     if (tooLarge) return callback({ code: 413, error: 'body_too_large' });
+    if (chunks.length === 0) return callback(null, {});
     try {
       const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
       callback(null, data);
@@ -170,34 +394,233 @@ function parseJsonBody(req, callback) {
   });
 }
 
-const server = http.createServer((req, res) => {
-  // Tránh truy cập qua Host bất ngờ và giữ API trong máy tính này.
-  const requestHost = (req.headers.host || '').toLowerCase();
-  if (!/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(requestHost)) return sendJson(res, 403, { error: 'forbidden_host' });
-  let pathname;
-  try { pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); }
-  catch { return sendJson(res, 400, { error: 'invalid_url' }); }
+function sanitizeAdminState(state) {
+  const cloned = structuredClone(state);
+  cloned.customers = cloned.customers.map(({ passwordHash, passwordSalt, ...rest }) => rest);
+  return cloned;
+}
 
-  // API Đăng nhập Admin với xác thực mật khẩu băm và Cookie session
-  if (pathname === '/api/admin/login') {
-    if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
-    if (!sameOrigin(req)) return sendJson(res, 403, { error: 'forbidden_origin' });
-    parseJsonBody(req, (err, body) => {
-      if (err) return sendJson(res, err.code, { error: err.error });
-      const { username, password } = body || {};
-      if (username !== ADMIN_USERNAME || typeof password !== 'string' || !verifyAdminPassword(password)) {
-        return sendJson(res, 401, { error: 'invalid_credentials', message: 'Tài khoản hoặc mật khẩu không đúng.' });
+function adjustStockWithLog(draftState, sku, productId, delta, reason, refId, actor) {
+  const beforeQty = draftState.stock[sku] ?? 0;
+  const afterQty = beforeQty + delta;
+  if (afterQty < 0) {
+    const err = new Error(`Không đủ tồn kho cho SKU ${sku}.`);
+    err.statusCode = 409;
+    err.code = 'insufficient_stock';
+    throw err;
+  }
+  draftState.stock[sku] = afterQty;
+  draftState.inventoryLogs.push({
+    id: 'log_' + crypto.randomBytes(6).toString('hex'),
+    sku,
+    productId,
+    beforeQty,
+    delta,
+    afterQty,
+    reason,
+    refId,
+    actor,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+function recordAdminLog(draftState, actor, action, targetId, detail) {
+  draftState.adminActivityLogs.push({
+    id: 'act_' + crypto.randomBytes(6).toString('hex'),
+    actor,
+    action,
+    targetId,
+    detail,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+// =========================================================
+// HTTP SERVER ROUTING
+// =========================================================
+const server = http.createServer((req, res) => {
+  const requestHost = (req.headers.host || '').toLowerCase();
+  if (!/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(requestHost)) {
+    return sendJson(res, 403, { error: 'forbidden_host' });
+  }
+  let pathname;
+  try {
+    pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+  } catch {
+    return sendJson(res, 400, { error: 'invalid_url' });
+  }
+
+  // Khóa vĩnh viễn /api/state công khai
+  if (pathname === '/api/state') {
+    return sendJson(res, 403, { error: 'legacy_api_disabled', message: 'API /api/state đã bị khóa. Vui lòng sử dụng Public, Customer hoặc Admin API.' });
+  }
+
+  // -------------------------------------------------------
+  // 1. PUBLIC API
+  // -------------------------------------------------------
+  if (pathname === '/api/public/bootstrap') {
+    if (req.method !== 'GET') return sendJson(res, 405, { error: 'method_not_allowed' });
+    const s = database.state;
+    const activeCategories = s.categories.filter(c => c.active);
+    const activeProducts = s.products.filter(p => p.active);
+    const activeSkus = new Set();
+    for (const p of activeProducts) {
+      for (const v of p.variants) {
+        if (v.active) activeSkus.add(v.sku);
       }
-      const token = crypto.randomBytes(32).toString('hex');
-      const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
-      adminSessions.set(token, { user: ADMIN_USERNAME, role: 'admin', expiresAt });
-      const cookie = `vp_admin_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=86400`;
-      return sendJson(res, 200, { success: true, user: ADMIN_USERNAME, role: 'admin' }, { 'Set-Cookie': cookie });
+    }
+    const publicStock = {};
+    for (const sku of activeSkus) {
+      publicStock[sku] = s.stock[sku] ?? 0;
+    }
+    return sendJson(res, 200, {
+      categories: activeCategories,
+      products: activeProducts,
+      stock: publicStock,
+      policies: s.policies,
+      siteContent: s.policies.banners || {},
+      config: BUSINESS_CONFIG,
+    });
+  }
+
+  if (pathname === '/api/public/track') {
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
+    if (!verifyWriteRequest(req, res)) return;
+    parseJsonBody(req, async (err, body) => {
+      if (err) return sendJson(res, err.code, { error: err.error });
+      const type = body?.type;
+      if (type !== 'visit' && type !== 'cart') {
+        return sendJson(res, 400, { error: 'invalid_track_type' });
+      }
+      try {
+        await runTransaction(null, draft => {
+          if (type === 'visit') draft.visits += 1;
+          else draft.cartEvents += 1;
+        });
+        return sendJson(res, 200, { ok: true });
+      } catch (e) {
+        return sendJson(res, e.statusCode || 500, { error: e.code || 'track_failed' });
+      }
     });
     return;
   }
 
-  // API Kiểm tra phiên làm việc Admin
+  // -------------------------------------------------------
+  // 2. CUSTOMER API (KHUNG BẢO VỆ GĐ1 — AUTH SẼ MỞ Ở GĐ2)
+  // -------------------------------------------------------
+  if (pathname === '/api/customer/session') {
+    if (req.method !== 'GET') return sendJson(res, 405, { error: 'method_not_allowed' });
+    const session = getCustomerSession(req);
+    if (!session) return sendJson(res, 200, { loggedIn: false });
+    const customer = database.state.customers.find(c => c.id === session.customerId);
+    if (!customer || customer.locked) return sendJson(res, 200, { loggedIn: false });
+    return sendJson(res, 200, {
+      loggedIn: true,
+      customer: { id: customer.id, name: customer.name, email: customer.email, phone: customer.phone, defaultAddress: customer.defaultAddress },
+    });
+  }
+
+  if (pathname === '/api/customer/orders') {
+    if (req.method !== 'GET') return sendJson(res, 405, { error: 'method_not_allowed' });
+    const auth = requireCustomer(req, res);
+    if (!auth) return;
+    const myOrders = database.state.orders.filter(o => o.customerId === auth.customer.id);
+    return sendJson(res, 200, { orders: myOrders });
+  }
+
+  const customerOrderDetailMatch = pathname.match(/^\/api\/customer\/orders\/([^/]+)$/);
+  if (customerOrderDetailMatch) {
+    if (req.method !== 'GET') return sendJson(res, 405, { error: 'method_not_allowed' });
+    const auth = requireCustomer(req, res);
+    if (!auth) return;
+    const order = database.state.orders.find(o => o.id === customerOrderDetailMatch[1]);
+    if (!order) return sendJson(res, 404, { error: 'not_found' });
+    if (order.customerId !== auth.customer.id) {
+      return sendJson(res, 403, { error: 'forbidden_order_access', message: 'Bạn không có quyền xem đơn hàng này.' });
+    }
+    return sendJson(res, 200, { order });
+  }
+
+  if (pathname === '/api/orders' || pathname.startsWith('/api/orders/')) {
+    const auth = requireCustomer(req, res);
+    if (!auth) return;
+    return sendJson(res, 501, { error: 'not_implemented_in_gd1' });
+  }
+
+  // Test-only fixture endpoint (chỉ bật khi VIETPHUC_TEST_MODE=1 để kiểm thử phân tách session)
+  if (process.env.VIETPHUC_TEST_MODE === '1' && pathname === '/api/_test/customer-session') {
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
+    parseJsonBody(req, async (err, body) => {
+      if (err) return sendJson(res, err.code, { error: err.error });
+      const { customerId, name, email, locked } = body || {};
+      try {
+        await runTransaction(null, draft => {
+          let c = draft.customers.find(x => x.id === customerId);
+          if (!c) {
+            const salt = crypto.randomBytes(16).toString('hex');
+            const hash = crypto.scryptSync('test-pass-only', salt, 64).toString('hex');
+            c = {
+              id: customerId,
+              name: name || 'Test Customer',
+              email: email || `${customerId}@example.com`,
+              phone: '0900000000',
+              defaultAddress: '',
+              passwordSalt: salt,
+              passwordHash: hash,
+              locked: Boolean(locked),
+              lockedReason: locked ? 'Test lock' : '',
+              createdAt: new Date().toISOString(),
+            };
+            draft.customers.push(c);
+          } else if (typeof locked === 'boolean') {
+            c.locked = locked;
+          }
+        });
+        const token = crypto.randomBytes(32).toString('hex');
+        const now = Date.now();
+        customerSessions.set(token, { customerId, expiresAt: now + SESSION_TTL_MS, lastActiveAt: now });
+        return sendJson(res, 200, { ok: true }, { 'Set-Cookie': `vp_customer_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=86400` });
+      } catch (e) {
+        return sendJson(res, 500, { error: e.message });
+      }
+    });
+    return;
+  }
+
+  // -------------------------------------------------------
+  // 3. ADMIN AUTH (HOẠT ĐỘNG KHI CHƯA ĐĂNG NHẬP)
+  // -------------------------------------------------------
+  if (pathname === '/api/admin/login') {
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
+    if (!verifyWriteRequest(req, res)) return;
+    const creds = loadAdminCredentials();
+    if (!creds) {
+      return sendJson(res, 503, {
+        error: 'admin_not_configured',
+        message: 'Tài khoản Admin chưa được cấu hình. Hãy thiết lập biến môi trường hoặc chạy node scripts/init-admin.js.',
+      });
+    }
+    const rateKey = req.socket.remoteAddress || 'local';
+    if (!checkLoginRateLimit(rateKey)) {
+      return sendJson(res, 429, { error: 'too_many_requests', message: 'Thử đăng nhập sai quá nhiều lần. Vui lòng đợi 5 phút.' });
+    }
+    parseJsonBody(req, (err, body) => {
+      if (err) return sendJson(res, err.code, { error: err.error });
+      const { username, password } = body || {};
+      if (username !== creds.username || typeof password !== 'string' || !verifyAdminPassword(password, creds)) {
+        recordLoginFailure(rateKey);
+        return sendJson(res, 401, { error: 'invalid_credentials', message: 'Tài khoản hoặc mật khẩu không đúng.' });
+      }
+      clearLoginFailures(rateKey);
+      const token = crypto.randomBytes(32).toString('hex');
+      const now = Date.now();
+      adminSessions.set(token, { user: creds.username, role: 'admin', expiresAt: now + SESSION_TTL_MS, lastActiveAt: now });
+      const cookie = `vp_admin_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=86400`;
+      return sendJson(res, 200, { success: true, user: creds.username, role: 'admin' }, { 'Set-Cookie': cookie });
+    });
+    return;
+  }
+
   if (pathname === '/api/admin/session') {
     if (req.method !== 'GET') return sendJson(res, 405, { error: 'method_not_allowed' });
     const session = getAdminSession(req);
@@ -205,33 +628,253 @@ const server = http.createServer((req, res) => {
     return sendJson(res, 200, { loggedIn: true, user: session.user, role: session.role });
   }
 
-  // API Đăng xuất Admin
   if (pathname === '/api/admin/logout') {
     if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
+    if (!verifyWriteRequest(req, res, false)) return;
     const session = getAdminSession(req);
     if (session) adminSessions.delete(session.token);
     const cookie = `vp_admin_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`;
     return sendJson(res, 200, { success: true }, { 'Set-Cookie': cookie });
   }
 
-  if (pathname === '/api/state') {
-    if (req.method === 'GET') return sendJson(res, 200, database);
-    if (req.method !== 'PUT') return sendJson(res, 405, { error: 'method_not_allowed' });
-    if (!sameOrigin(req)) return sendJson(res, 403, { error: 'forbidden_origin' });
-    if (!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] || '')) return sendJson(res, 415, { error: 'json_required' });
-    
-    parseJsonBody(req, (err, update) => {
+  // -------------------------------------------------------
+  // 4. ADMIN DATA API (BẮT BUỘC requireAdmin)
+  // -------------------------------------------------------
+  if (pathname === '/api/admin/bootstrap') {
+    if (req.method !== 'GET') return sendJson(res, 405, { error: 'method_not_allowed' });
+    if (!requireAdmin(req, res)) return;
+    return sendJson(res, 200, { revision: database.revision, state: sanitizeAdminState(database.state), config: BUSINESS_CONFIG });
+  }
+
+  // Cập nhật trạng thái đơn hàng
+  const orderStatusMatch = pathname.match(/^\/api\/admin\/orders\/([^/]+)\/status$/);
+  if (orderStatusMatch) {
+    if (req.method !== 'PATCH') return sendJson(res, 405, { error: 'method_not_allowed' });
+    if (!verifyWriteRequest(req, res)) return;
+    const session = requireAdmin(req, res);
+    if (!session) return;
+    const orderId = orderStatusMatch[1];
+
+    parseJsonBody(req, async (err, body) => {
       if (err) return sendJson(res, err.code, { error: err.error });
-      if (!update || !Number.isSafeInteger(update.revision) || update.revision < 0 || !validState(update.state)) return sendJson(res, 400, { error: 'invalid_state' });
-      if (update.revision !== database.revision) return sendJson(res, 409, { error: 'conflict', ...database });
-      const next = { revision: database.revision + 1, state: update.state };
-      try { writeDatabase(next); database = next; }
-      catch (err) { console.error('Không thể lưu cơ sở dữ liệu:', err.message); return sendJson(res, 500, { error: 'write_failed' }); }
-      return sendJson(res, 200, database);
+      const { nextStatus, revision, note } = body || {};
+      try {
+        const txRes = await runTransaction(revision, draft => {
+          const o = draft.orders.find(x => x.id === orderId);
+          if (!o) {
+            const e = new Error('Không tìm thấy đơn hàng.');
+            e.statusCode = 404; e.code = 'not_found'; throw e;
+          }
+          const allowed = {
+            pending: ['confirmed', 'cancelled'],
+            confirmed: ['packing', 'shipping', 'cancelled'],
+            packing: ['shipping', 'cancelled'],
+            shipping: ['delivered', 'delivery_failed'],
+            delivery_failed: ['returning'],
+            returning: ['returned'],
+          };
+          if (!allowed[o.orderStatus] || !allowed[o.orderStatus].includes(nextStatus)) {
+            const e = new Error('Trạng thái đơn hàng không hợp lệ cho thao tác này.');
+            e.statusCode = 409; e.code = 'invalid_transition'; throw e;
+          }
+          if (nextStatus === 'shipping' && o.paymentMethod === 'online' && o.paymentStatus !== 'paid') {
+            const e = new Error('Chặn thao tác: Đơn thanh toán trực tuyến chưa hoàn tất thanh toán.');
+            e.statusCode = 409; e.code = 'payment_required'; throw e;
+          }
+
+          const now = new Date().toISOString();
+          o.orderStatus = nextStatus;
+
+          if (nextStatus === 'shipping') {
+            o.inventoryStatus = 'fulfilled';
+            o.shipment.shippedAt = now;
+          } else if (nextStatus === 'delivered') {
+            o.shipment.deliveredAt = now;
+            if (o.paymentMethod === 'COD' && o.paymentStatus === 'unpaid') {
+              o.paymentStatus = 'paid';
+              o.transactions.push({ id: 'tx_cod_' + crypto.randomBytes(4).toString('hex'), method: 'COD', amount: o.total, status: 'success', isSimulated: true, createdAt: now, actor: session.user });
+            }
+          } else if (nextStatus === 'returned' || nextStatus === 'cancelled') {
+            if (o.inventoryStatus === 'reserved' || o.inventoryStatus === 'fulfilled') {
+              for (const it of o.items) {
+                if (it.sku && Object.prototype.hasOwnProperty.call(draft.stock, it.sku)) {
+                  adjustStockWithLog(draft, it.sku, it.productId, it.qty, nextStatus === 'cancelled' ? 'order_cancel' : 'order_returned', o.id, session.user);
+                }
+              }
+              o.inventoryStatus = nextStatus === 'cancelled' ? 'released' : 'returned';
+            }
+            if (nextStatus === 'returned') o.shipment.returnedAt = now;
+          }
+
+          o.history.push({ status: nextStatus, note: note || `Admin chuyển trạng thái sang ${nextStatus}`, actor: session.user, at: now });
+          recordAdminLog(draft, session.user, 'order_status', o.id, `${nextStatus}`);
+          return o;
+        });
+        return sendJson(res, 200, { revision: txRes.revision, order: txRes.result, state: sanitizeAdminState(txRes.state) });
+      } catch (e) {
+        const extra = e.code === 'conflict' ? { revision: database.revision, state: sanitizeAdminState(database.state) } : {};
+        return sendJson(res, e.statusCode || 500, { error: e.code || 'update_failed', message: e.message, ...extra });
+      }
     });
     return;
   }
+
+  // Hoàn tiền mô phỏng (từ Admin UI hiện có)
+  const orderRefundMatch = pathname.match(/^\/api\/admin\/orders\/([^/]+)\/refund$/);
+  if (orderRefundMatch) {
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
+    if (!verifyWriteRequest(req, res)) return;
+    const session = requireAdmin(req, res);
+    if (!session) return;
+    const orderId = orderRefundMatch[1];
+
+    parseJsonBody(req, async (err, body) => {
+      if (err) return sendJson(res, err.code, { error: err.error });
+      const { amount, reason, revision } = body || {};
+      try {
+        const txRes = await runTransaction(revision, draft => {
+          const o = draft.orders.find(x => x.id === orderId);
+          if (!o) {
+            const e = new Error('Không tìm thấy đơn hàng.');
+            e.statusCode = 404; e.code = 'not_found'; throw e;
+          }
+          const paid = o.transactions.filter(t => t.status === 'success').reduce((s, t) => s + t.amount, 0);
+          const refunded = o.refunds.filter(r => r.status === 'success').reduce((s, r) => s + r.amount, 0);
+          const reqAmount = Number.isSafeInteger(amount) ? amount : o.total;
+          if (reqAmount <= 0 || refunded + reqAmount > paid) {
+            const e = new Error('Số tiền hoàn vượt quá số tiền đã thanh toán hoặc đã hoàn đủ.');
+            e.statusCode = 409; e.code = 'invalid_refund_amount'; throw e;
+          }
+          const now = new Date().toISOString();
+          o.refunds.push({
+            id: 'rf_' + crypto.randomBytes(5).toString('hex'),
+            transactionId: o.transactions.find(t => t.status === 'success')?.id || null,
+            amount: reqAmount,
+            status: 'success',
+            isSimulated: true,
+            reason: reason || 'Admin xác nhận hoàn tiền mô phỏng',
+            createdAt: now,
+            actor: session.user,
+          });
+          o.paymentStatus = (refunded + reqAmount === paid) ? 'refunded' : 'partially_refunded';
+          o.history.push({ status: o.orderStatus, note: `Hoàn tiền mô phỏng ${reqAmount}`, actor: session.user, at: now });
+          recordAdminLog(draft, session.user, 'order_refund', o.id, `Hoàn ${reqAmount}`);
+          return o;
+        });
+        return sendJson(res, 200, { revision: txRes.revision, order: txRes.result, state: sanitizeAdminState(txRes.state) });
+      } catch (e) {
+        const extra = e.code === 'conflict' ? { revision: database.revision, state: sanitizeAdminState(database.state) } : {};
+        return sendJson(res, e.statusCode || 500, { error: e.code || 'refund_failed', message: e.message, ...extra });
+      }
+    });
+    return;
+  }
+
+  // Đối soát COD mô phỏng
+  const orderSettleMatch = pathname.match(/^\/api\/admin\/orders\/([^/]+)\/settle$/);
+  if (orderSettleMatch) {
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
+    if (!verifyWriteRequest(req, res)) return;
+    const session = requireAdmin(req, res);
+    if (!session) return;
+    const orderId = orderSettleMatch[1];
+
+    parseJsonBody(req, async (err, body) => {
+      if (err) return sendJson(res, err.code, { error: err.error });
+      const { revision } = body || {};
+      try {
+        const txRes = await runTransaction(revision, draft => {
+          const o = draft.orders.find(x => x.id === orderId);
+          if (!o) {
+            const e = new Error('Không tìm thấy đơn hàng.');
+            e.statusCode = 404; e.code = 'not_found'; throw e;
+          }
+          if (o.settlementStatus === 'settled') {
+            const e = new Error('Đơn hàng đã được đối soát trước đó.');
+            e.statusCode = 409; e.code = 'already_settled'; throw e;
+          }
+          if (o.orderStatus !== 'delivered') {
+            const e = new Error('Chỉ đối soát đơn hàng đã giao thành công.');
+            e.statusCode = 409; e.code = 'invalid_order_status'; throw e;
+          }
+          const now = new Date().toISOString();
+          o.settlementStatus = 'settled';
+          o.settledAt = now;
+          o.history.push({ status: o.orderStatus, note: 'Đã đối soát COD mô phỏng', actor: session.user, at: now });
+          recordAdminLog(draft, session.user, 'order_settle', o.id, 'settled');
+          return o;
+        });
+        return sendJson(res, 200, { revision: txRes.revision, order: txRes.result, state: sanitizeAdminState(txRes.state) });
+      } catch (e) {
+        const extra = e.code === 'conflict' ? { revision: database.revision, state: sanitizeAdminState(database.state) } : {};
+        return sendJson(res, e.statusCode || 500, { error: e.code || 'settle_failed', message: e.message, ...extra });
+      }
+    });
+    return;
+  }
+
+  // Duyệt/từ chối đổi trả hiện có
+  const returnMatch = pathname.match(/^\/api\/admin\/returns\/([^/]+)$/);
+  if (returnMatch) {
+    if (req.method !== 'PATCH') return sendJson(res, 405, { error: 'method_not_allowed' });
+    if (!verifyWriteRequest(req, res)) return;
+    const session = requireAdmin(req, res);
+    if (!session) return;
+    const retId = returnMatch[1];
+
+    parseJsonBody(req, async (err, body) => {
+      if (err) return sendJson(res, err.code, { error: err.error });
+      const { action, note, revision } = body || {};
+      try {
+        const txRes = await runTransaction(revision, draft => {
+          const ret = draft.returns.find(r => r.id === retId);
+          if (!ret) {
+            const e = new Error('Không tìm thấy yêu cầu đổi trả.');
+            e.statusCode = 404; e.code = 'not_found'; throw e;
+          }
+          if (ret.status === 'completed' || ret.status === 'rejected') {
+            const e = new Error('Yêu cầu đã được xử lý trước đó.');
+            e.statusCode = 409; e.code = 'already_resolved'; throw e;
+          }
+          const now = new Date().toISOString();
+          const o = draft.orders.find(x => x.id === ret.orderId);
+          if (action === 'approve') {
+            ret.status = 'completed';
+            ret.resolution = 'refund';
+            ret.resolvedAt = now;
+            for (const it of ret.items) {
+              it.condition = 'resellable';
+              if (it.sku && Object.prototype.hasOwnProperty.call(draft.stock, it.sku)) {
+                adjustStockWithLog(draft, it.sku, it.productId, it.qty, 'return_restock', o?.id || ret.id, session.user);
+              }
+            }
+            if (o) {
+              o.inventoryStatus = 'returned';
+              o.history.push({ status: o.orderStatus, note: 'Chấp thuận đổi trả & nhập lại kho', actor: session.user, at: now });
+            }
+          } else if (action === 'reject') {
+            ret.status = 'rejected';
+            ret.resolvedAt = now;
+            if (o) o.history.push({ status: o.orderStatus, note: `Từ chối đổi trả: ${note || ''}`, actor: session.user, at: now });
+          } else {
+            const e = new Error('Hành động không hợp lệ.');
+            e.statusCode = 400; e.code = 'invalid_action'; throw e;
+          }
+          recordAdminLog(draft, session.user, 'return_' + action, ret.id, note || '');
+          return ret;
+        });
+        return sendJson(res, 200, { revision: txRes.revision, returnRequest: txRes.result, state: sanitizeAdminState(txRes.state) });
+      } catch (e) {
+        const extra = e.code === 'conflict' ? { revision: database.revision, state: sanitizeAdminState(database.state) } : {};
+        return sendJson(res, e.statusCode || 500, { error: e.code || 'return_failed', message: e.message, ...extra });
+      }
+    });
+    return;
+  }
+
   if (pathname.startsWith('/api/')) return sendJson(res, 404, { error: 'not_found' });
+
+  // Phục vụ static files trong dist/
   if (req.method !== 'GET' && req.method !== 'HEAD') return sendJson(res, 405, { error: 'method_not_allowed' });
   if (pathname.includes('\0') || pathname.includes('\\')) return sendJson(res, 400, { error: 'invalid_path' });
   const requested = pathname === '/' ? '/index.html' : pathname;
@@ -239,7 +882,11 @@ const server = http.createServer((req, res) => {
   if (!file.startsWith(root + path.sep)) return sendJson(res, 403, { error: 'forbidden' });
   fs.stat(file, (error, stat) => {
     if (error || !stat.isFile()) return sendJson(res, 404, { error: 'not_found' });
-    res.writeHead(200, { 'Content-Type': mime[path.extname(file).toLowerCase()] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-cache' });
+    res.writeHead(200, {
+      'Content-Type': mime[path.extname(file).toLowerCase()] || 'application/octet-stream',
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'no-cache',
+    });
     if (req.method === 'HEAD') return res.end();
     const stream = fs.createReadStream(file);
     stream.on('error', () => res.destroy());
@@ -249,6 +896,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(port, host, () => {
   console.log(`Việt Phục đang chạy tại http://${host}:${server.address().port}`);
-  console.log(`Dữ liệu JSON: ${databasePath}`);
+  console.log(`Dữ liệu JSON (Schema V2): ${databasePath}`);
 });
-

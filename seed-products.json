@@ -1,11 +1,210 @@
-[
-  {"id":"p1","name":"Áo dài An Nhiên","category":"Áo dài truyền thống","price":1250000,"old":1450000,"color":"Đỏ trầm","material":"Lụa mềm","tag":"BÁN CHẠY","img":"assets/ao-dai-do.png","addedAt":"2026-01-10"},
-  {"id":"p2","name":"Áo dài Bạch Liên","category":"Áo dài truyền thống","price":890000,"color":"Trắng ngà","material":"Lụa tổng hợp","tag":"MỚI","img":"assets/ao-dai-trang.png","addedAt":"2026-03-14"},
-  {"id":"p3","name":"Bộ tứ thân Kinh Bắc","category":"Áo tứ thân","price":1150000,"color":"Nâu đất","material":"Cotton pha","tag":"ĐƯỢC YÊU THÍCH","img":"assets/ao-tu-than.png","addedAt":"2026-02-02"},
-  {"id":"p4","name":"Áo bà ba Hương Sen","category":"Áo bà ba","price":690000,"color":"Hồng sen","material":"Cotton mềm","tag":"MỚI","img":"assets/ao-ba-ba.png","addedAt":"2026-04-05"},
-  {"id":"p5","name":"Bộ tứ thân Thương Nhớ","category":"Áo tứ thân","price":1290000,"color":"Đen","material":"Cotton pha","tag":"DI SẢN VIỆT","img":"assets/ao-tu-than.png","addedAt":"2026-01-21"},
-  {"id":"p6","name":"Áo bà ba Mộc Miên","category":"Áo bà ba","price":590000,"color":"Hồng phấn","material":"Cotton mềm","tag":"BÁN CHẠY","img":"assets/ao-ba-ba.png","addedAt":"2026-02-25"},
-  {"id":"p7","name":"Bộ Việt phục Đồng Quê","category":"Áo tứ thân","price":990000,"color":"Nâu đất","material":"Cotton pha","tag":"MỚI","img":"assets/ao-tu-than.png","addedAt":"2026-05-12"},
-  {"id":"p8","name":"Áo dài cách tân Lụa Mộc","category":"Áo dài cách tân","price":790000,"color":"Xanh nhạt","material":"Lụa tổng hợp","tag":"MỚI","img":"assets/ao-dai-xanh.png","addedAt":"2026-06-08"},
-  {"id":"p9","name":"Mấn gấm đỏ truyền thống","category":"Phụ kiện","price":320000,"color":"Đỏ trầm","material":"Gấm","tag":"MỚI","img":"assets/accessory.png","sizes":["One Size"],"addedAt":"2026-07-01"}
-]
+{
+  "categories": [
+    { "id": "cat1", "name": "Áo dài truyền thống", "active": true, "sortOrder": 1 },
+    { "id": "cat2", "name": "Áo dài cách tân", "active": true, "sortOrder": 2 },
+    { "id": "cat3", "name": "Áo bà ba", "active": true, "sortOrder": 3 },
+    { "id": "cat4", "name": "Áo tứ thân", "active": true, "sortOrder": 4 },
+    { "id": "cat5", "name": "Phụ kiện", "active": true, "sortOrder": 5 }
+  ],
+  "products": [
+    {
+      "id": "p1",
+      "categoryId": "cat1",
+      "name": "Áo dài An Nhiên",
+      "description": "Thiết kế áo dài truyền thống chất liệu lụa mềm rũ nhẹ, giữ phom dáng thanh lịch.",
+      "price": 1250000,
+      "old": 1450000,
+      "material": "Lụa mềm",
+      "tag": "BÁN CHẠY",
+      "img": "assets/ao-dai-do.png",
+      "variants": [
+        { "sku": "VP-P1-DO_TRAM-S", "color": "Đỏ trầm", "size": "S", "priceOverride": null, "active": true },
+        { "sku": "VP-P1-DO_TRAM-M", "color": "Đỏ trầm", "size": "M", "priceOverride": null, "active": true },
+        { "sku": "VP-P1-DO_TRAM-L", "color": "Đỏ trầm", "size": "L", "priceOverride": null, "active": true },
+        { "sku": "VP-P1-DO_TRAM-XL", "color": "Đỏ trầm", "size": "XL", "priceOverride": null, "active": true }
+      ],
+      "active": true,
+      "featured": true,
+      "addedAt": "2026-01-10"
+    },
+    {
+      "id": "p2",
+      "categoryId": "cat1",
+      "name": "Áo dài Bạch Liên",
+      "description": "Áo dài trắng ngà tinh khôi phù hợp các dịp lễ, sự kiện trang trọng.",
+      "price": 890000,
+      "old": null,
+      "material": "Lụa tổng hợp",
+      "tag": "MỚI",
+      "img": "assets/ao-dai-trang.png",
+      "variants": [
+        { "sku": "VP-P2-TRANG_NGA-S", "color": "Trắng ngà", "size": "S", "priceOverride": null, "active": true },
+        { "sku": "VP-P2-TRANG_NGA-M", "color": "Trắng ngà", "size": "M", "priceOverride": null, "active": true },
+        { "sku": "VP-P2-TRANG_NGA-L", "color": "Trắng ngà", "size": "L", "priceOverride": null, "active": true },
+        { "sku": "VP-P2-TRANG_NGA-XL", "color": "Trắng ngà", "size": "XL", "priceOverride": null, "active": true }
+      ],
+      "active": true,
+      "featured": false,
+      "addedAt": "2026-03-14"
+    },
+    {
+      "id": "p3",
+      "categoryId": "cat4",
+      "name": "Bộ tứ thân Kinh Bắc",
+      "description": "Bộ tứ thân mang âm hưởng truyền thống vùng Kinh Bắc, chất liệu cotton pha thoáng mát.",
+      "price": 1150000,
+      "old": null,
+      "material": "Cotton pha",
+      "tag": "ĐƯỢC YÊU THÍCH",
+      "img": "assets/ao-tu-than.png",
+      "variants": [
+        { "sku": "VP-P3-NAU_DAT-S", "color": "Nâu đất", "size": "S", "priceOverride": null, "active": true },
+        { "sku": "VP-P3-NAU_DAT-M", "color": "Nâu đất", "size": "M", "priceOverride": null, "active": true },
+        { "sku": "VP-P3-NAU_DAT-L", "color": "Nâu đất", "size": "L", "priceOverride": null, "active": true },
+        { "sku": "VP-P3-NAU_DAT-XL", "color": "Nâu đất", "size": "XL", "priceOverride": null, "active": true }
+      ],
+      "active": true,
+      "featured": true,
+      "addedAt": "2026-02-02"
+    },
+    {
+      "id": "p4",
+      "categoryId": "cat3",
+      "name": "Áo bà ba Hương Sen",
+      "description": "Áo bà ba sắc hồng sen dịu dàng, đường may gọn gàng dễ mặc hằng ngày.",
+      "price": 690000,
+      "old": null,
+      "material": "Cotton mềm",
+      "tag": "MỚI",
+      "img": "assets/ao-ba-ba.png",
+      "variants": [
+        { "sku": "VP-P4-HONG_SEN-S", "color": "Hồng sen", "size": "S", "priceOverride": null, "active": true },
+        { "sku": "VP-P4-HONG_SEN-M", "color": "Hồng sen", "size": "M", "priceOverride": null, "active": true },
+        { "sku": "VP-P4-HONG_SEN-L", "color": "Hồng sen", "size": "L", "priceOverride": null, "active": true },
+        { "sku": "VP-P4-HONG_SEN-XL", "color": "Hồng sen", "size": "XL", "priceOverride": null, "active": true }
+      ],
+      "active": true,
+      "featured": false,
+      "addedAt": "2026-04-05"
+    },
+    {
+      "id": "p5",
+      "categoryId": "cat4",
+      "name": "Bộ tứ thân Thương Nhớ",
+      "description": "Bộ tứ thân tông đen cổ điển, tôn nét duyên dáng truyền thống.",
+      "price": 1290000,
+      "old": null,
+      "material": "Cotton pha",
+      "tag": "DI SẢN VIỆT",
+      "img": "assets/ao-tu-than.png",
+      "variants": [
+        { "sku": "VP-P5-BLACK-S", "color": "Đen", "size": "S", "priceOverride": null, "active": true },
+        { "sku": "VP-P5-BLACK-M", "color": "Đen", "size": "M", "priceOverride": null, "active": true },
+        { "sku": "VP-P5-BLACK-L", "color": "Đen", "size": "L", "priceOverride": null, "active": true },
+        { "sku": "VP-P5-BLACK-XL", "color": "Đen", "size": "XL", "priceOverride": null, "active": true }
+      ],
+      "active": true,
+      "featured": true,
+      "addedAt": "2026-01-21"
+    },
+    {
+      "id": "p6",
+      "categoryId": "cat3",
+      "name": "Áo bà ba Mộc Miên",
+      "description": "Áo bà ba hồng phấn nhẹ nhàng, chất cotton mềm thấm hút tốt.",
+      "price": 590000,
+      "old": null,
+      "material": "Cotton mềm",
+      "tag": "BÁN CHẠY",
+      "img": "assets/ao-ba-ba.png",
+      "variants": [
+        { "sku": "VP-P6-HONG_PHAN-S", "color": "Hồng phấn", "size": "S", "priceOverride": null, "active": true },
+        { "sku": "VP-P6-HONG_PHAN-M", "color": "Hồng phấn", "size": "M", "priceOverride": null, "active": true },
+        { "sku": "VP-P6-HONG_PHAN-L", "color": "Hồng phấn", "size": "L", "priceOverride": null, "active": true },
+        { "sku": "VP-P6-HONG_PHAN-XL", "color": "Hồng phấn", "size": "XL", "priceOverride": null, "active": true }
+      ],
+      "active": true,
+      "featured": false,
+      "addedAt": "2026-02-25"
+    },
+    {
+      "id": "p7",
+      "categoryId": "cat4",
+      "name": "Bộ Việt phục Đồng Quê",
+      "description": "Trang phục lấy cảm hứng từ nét đẹp đồng quê Việt Nam, dễ phối phụ kiện.",
+      "price": 990000,
+      "old": null,
+      "material": "Cotton pha",
+      "tag": "MỚI",
+      "img": "assets/ao-tu-than.png",
+      "variants": [
+        { "sku": "VP-P7-NAU_DAT-S", "color": "Nâu đất", "size": "S", "priceOverride": null, "active": true },
+        { "sku": "VP-P7-NAU_DAT-M", "color": "Nâu đất", "size": "M", "priceOverride": null, "active": true },
+        { "sku": "VP-P7-NAU_DAT-L", "color": "Nâu đất", "size": "L", "priceOverride": null, "active": true },
+        { "sku": "VP-P7-NAU_DAT-XL", "color": "Nâu đất", "size": "XL", "priceOverride": null, "active": true }
+      ],
+      "active": true,
+      "featured": false,
+      "addedAt": "2026-05-12"
+    },
+    {
+      "id": "p8",
+      "categoryId": "cat2",
+      "name": "Áo dài cách tân Lụa Mộc",
+      "description": "Áo dài cách tân dáng trẻ trung, sắc xanh nhạt trang nhã.",
+      "price": 790000,
+      "old": null,
+      "material": "Lụa tổng hợp",
+      "tag": "MỚI",
+      "img": "assets/ao-dai-xanh.png",
+      "variants": [
+        { "sku": "VP-P8-XANH_NHAT-S", "color": "Xanh nhạt", "size": "S", "priceOverride": null, "active": true },
+        { "sku": "VP-P8-XANH_NHAT-M", "color": "Xanh nhạt", "size": "M", "priceOverride": null, "active": true },
+        { "sku": "VP-P8-XANH_NHAT-L", "color": "Xanh nhạt", "size": "L", "priceOverride": null, "active": true },
+        { "sku": "VP-P8-XANH_NHAT-XL", "color": "Xanh nhạt", "size": "XL", "priceOverride": null, "active": true }
+      ],
+      "active": true,
+      "featured": false,
+      "addedAt": "2026-06-08"
+    },
+    {
+      "id": "p9",
+      "categoryId": "cat5",
+      "name": "Mấn gấm đỏ truyền thống",
+      "description": "Phụ kiện mấn đội đầu chất liệu gấm đỏ trầm, hoàn thiện bộ áo dài.",
+      "price": 320000,
+      "old": null,
+      "material": "Gấm",
+      "tag": "MỚI",
+      "img": "assets/accessory.png",
+      "variants": [
+        { "sku": "VP-P9-DO_TRAM-ONE_SIZE", "color": "Đỏ trầm", "size": "One Size", "priceOverride": null, "active": true }
+      ],
+      "active": true,
+      "featured": false,
+      "addedAt": "2026-07-01"
+    }
+  ],
+  "policies": {
+    "version": 1,
+    "updatedAt": "2026-11-25T00:00:00.000Z",
+    "storeInfo": {
+      "name": "VIỆT PHỤC — Traditional Clothing",
+      "hours": "Thứ 2 – Thứ 7: 8:00 – 17:00",
+      "region": "Phục vụ khách hàng tại Việt Nam"
+    },
+    "banners": {
+      "heroTitle": "Nét Việt trong từng tà áo",
+      "heroImg": "assets/hero.png"
+    },
+    "items": {
+      "size": "Bảng size tham khảo: S 40–47 kg; M 48–54 kg; L 55–61 kg; XL 62–68 kg.",
+      "shipping": "Giao hàng tiêu chuẩn 30.000₫ hoặc giao nhanh 45.000₫ (mức phí mô phỏng cho đồ án).",
+      "returns": "Tiếp nhận yêu cầu đổi trả trong 7 ngày từ khi nhận hàng và hoàn tiền mô phỏng trong 5 ngày làm việc sau khi xác nhận đủ điều kiện.",
+      "privacy": "Dữ liệu đơn hàng và tài khoản được lưu cục bộ trên máy chủ đồ án để phục vụ học tập và trình diễn.",
+      "payment": "Hỗ trợ COD mô phỏng và thanh toán trực tuyến mô phỏng.",
+      "warranty": "Hỗ trợ sửa chữa đường may/khuy nút trong 30 ngày theo chính sách cửa hàng.",
+      "terms": "Khách hàng vui lòng cung cấp thông tin nhận hàng chính xác cho bản trình diễn."
+    }
+  }
+}
