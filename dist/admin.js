@@ -1,0 +1,1462 @@
+(() => {
+  'use strict';
+
+  // Định dạng tiền tệ VND & escape HTML an toàn
+  const money = n => new Intl.NumberFormat('vi-VN').format(n || 0) + '₫';
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  // Bảng mã màu sản phẩm đồng bộ với Storefront
+  const colorSwatches = {
+    'Đỏ trầm': '#762F38',
+    'Trắng ngà': '#F3EEE2',
+    'Nâu đất': '#805D48',
+    'Hồng sen': '#DD8A99',
+    'Đen': '#352C28',
+    'Hồng phấn': '#EAC5C9',
+    'Xanh nhạt': '#A9C9CB'
+  };
+
+  // Bộ icon SVG đồng bộ
+  const icons = {
+    check: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+    x: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`,
+    truck: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`,
+    rotate: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>`,
+    boxIn: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+    refund: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5a2.5 2.5 0 0 0-5 0c0 2 5 1.5 5 4a2.5 2.5 0 0 1-5 0"/><path d="M12 6v12"/></svg>`,
+    arrowRight: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`,
+    emptyBox: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>`,
+    alert: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+    eye: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`,
+    eyeOff: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>`
+  };
+
+  // Trạng thái ứng dụng Admin
+  let currentAdmin = null;
+  let currentTab = 'orders';
+  let dbRevision = 0;
+  let dbState = { products: [], orders: [], stock: {}, visits: 0, cartEvents: 0 };
+  let isSaving = false;
+  let selectedOrderId = null;
+  let activeDialogResolve = null;
+
+  // Helpers Stock (giữ nguyên logic)
+  const stockKey = (id, size) => `${id}|${size}`;
+  const getAvailableStock = (id, size) => dbState.stock[stockKey(id, size)] ?? 8;
+  const modifyStock = (id, size, delta) => {
+    const key = stockKey(id, size);
+    const current = getAvailableStock(id, size);
+    dbState.stock[key] = Math.max(0, current + delta);
+  };
+
+  // Toast Notification thống nhất
+  function showToast(msg, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `admin-toast ${type}`;
+    const iconSvg = type === 'success' ? icons.check : (type === 'danger' ? icons.alert : icons.rotate);
+    toast.innerHTML = `<span style="display:inline-flex;flex-shrink:0;">${iconSvg}</span><span>${esc(msg)}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity 0.2s ease';
+      setTimeout(() => toast.remove(), 220);
+    }, 3200);
+  }
+
+  // Custom Confirm & Prompt Dialog (thay thế confirm() và prompt() mặc định)
+  function closeDialog(result = null) {
+    const container = document.getElementById('custom-dialog-container');
+    if (container) container.innerHTML = '';
+    if (activeDialogResolve) {
+      const resolve = activeDialogResolve;
+      activeDialogResolve = null;
+      resolve(result);
+    }
+  }
+
+  function showConfirmDialog({ title, message, confirmText = 'Xác nhận', cancelText = 'Hủy', danger = false }) {
+    return new Promise(resolve => {
+      if (activeDialogResolve) activeDialogResolve(false);
+      activeDialogResolve = resolve;
+      const container = document.getElementById('custom-dialog-container');
+      container.innerHTML = `
+        <div class="dialog-overlay" data-dialog-close>
+          <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title" onclick="event.stopPropagation()">
+            <div class="dialog-header">
+              <h4 id="dialog-title">${esc(title)}</h4>
+              <button type="button" class="drawer-close" data-dialog-close aria-label="Đóng">&times;</button>
+            </div>
+            <div class="dialog-body">${esc(message)}</div>
+            <div class="dialog-footer">
+              <button type="button" class="btn btn-outline btn-sm" data-dialog-close>${esc(cancelText)}</button>
+              <button type="button" class="btn ${danger ? 'btn-danger-solid' : 'btn-primary'} btn-sm" id="dialog-confirm-btn">${esc(confirmText)}</button>
+            </div>
+          </div>
+        </div>
+      `;
+      container.querySelectorAll('[data-dialog-close]').forEach(el => {
+        el.addEventListener('click', () => closeDialog(false));
+      });
+      const confirmBtn = document.getElementById('dialog-confirm-btn');
+      confirmBtn?.addEventListener('click', () => closeDialog(true));
+      confirmBtn?.focus();
+    });
+  }
+
+  function showPromptDialog({ title, message, placeholder = '', defaultValue = '', confirmText = 'Xác nhận' }) {
+    return new Promise(resolve => {
+      if (activeDialogResolve) activeDialogResolve(null);
+      activeDialogResolve = resolve;
+      const container = document.getElementById('custom-dialog-container');
+      container.innerHTML = `
+        <div class="dialog-overlay" data-dialog-close>
+          <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title" onclick="event.stopPropagation()">
+            <div class="dialog-header">
+              <h4 id="dialog-title">${esc(title)}</h4>
+              <button type="button" class="drawer-close" data-dialog-close aria-label="Đóng">&times;</button>
+            </div>
+            <form id="dialog-prompt-form">
+              <div class="dialog-body">
+                <p style="margin-bottom: 12px;">${esc(message)}</p>
+                <textarea id="dialog-prompt-input" class="form-control" rows="3" placeholder="${esc(placeholder)}" required>${esc(defaultValue)}</textarea>
+              </div>
+              <div class="dialog-footer">
+                <button type="button" class="btn btn-outline btn-sm" data-dialog-close>Hủy bỏ</button>
+                <button type="submit" class="btn btn-danger-solid btn-sm">${esc(confirmText)}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      `;
+      container.querySelectorAll('[data-dialog-close]').forEach(el => {
+        el.addEventListener('click', () => closeDialog(null));
+      });
+      const input = document.getElementById('dialog-prompt-input');
+      input?.focus();
+      input?.select();
+      document.getElementById('dialog-prompt-form')?.addEventListener('submit', e => {
+        e.preventDefault();
+        closeDialog(input.value.trim());
+      });
+    });
+  }
+
+  // Mobile Sidebar helpers
+  function toggleMobileSidebar(open) {
+    const sidebar = document.getElementById('admin-sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (!sidebar || !backdrop) return;
+    sidebar.classList.toggle('open', open);
+    backdrop.classList.toggle('open', open);
+  }
+
+  function updateAdminProfileDisplay(username) {
+    const display = document.getElementById('admin-user-display');
+    const initials = document.getElementById('admin-avatar-initials');
+    if (display) display.textContent = username;
+    if (initials) initials.textContent = String(username || 'AD').slice(0, 2).toUpperCase();
+  }
+
+  // Kết nối Backend API (giữ nguyên endpoint & xác thực)
+  async function checkSession() {
+    try {
+      const res = await fetch('/api/admin/session', { cache: 'no-store' });
+      const data = await res.json();
+      if (data && data.loggedIn) {
+        currentAdmin = data.user || 'admin';
+        updateAdminProfileDisplay(currentAdmin);
+        showDashboardView();
+        await loadDatabase();
+      } else {
+        showAuthView();
+      }
+    } catch {
+      showAuthView();
+    }
+  }
+
+  async function login(username, password) {
+    const errorEl = document.getElementById('login-error');
+    const submitBtn = document.getElementById('login-submit-btn');
+    errorEl.style.display = 'none';
+    if (submitBtn) {
+      submitBtn.classList.add('is-loading');
+      submitBtn.textContent = 'Đang xác thực...';
+    }
+
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Đăng nhập thất bại.');
+      }
+      currentAdmin = data.user || 'admin';
+      updateAdminProfileDisplay(currentAdmin);
+      showToast('Đăng nhập quản trị thành công!', 'success');
+      showDashboardView();
+      await loadDatabase();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = 'block';
+    } finally {
+      if (submitBtn) {
+        submitBtn.classList.remove('is-loading');
+        submitBtn.textContent = 'Đăng nhập hệ thống';
+      }
+    }
+  }
+
+  async function logout() {
+    try {
+      await fetch('/api/admin/logout', { method: 'POST' });
+    } catch (_) {}
+    currentAdmin = null;
+    closeOrderDetail();
+    toggleMobileSidebar(false);
+    showToast('Đã đăng xuất khỏi trang quản trị.');
+    showAuthView();
+  }
+
+  function showAuthView() {
+    document.getElementById('auth-view').style.display = 'flex';
+    document.getElementById('dashboard-view').style.display = 'none';
+  }
+
+  function showDashboardView() {
+    document.getElementById('auth-view').style.display = 'none';
+    document.getElementById('dashboard-view').style.display = 'flex';
+  }
+
+  // CSDL State Sync (giữ nguyên cơ chế revision)
+  async function loadDatabase() {
+    const syncBadge = document.getElementById('sync-status');
+    const syncText = document.getElementById('sync-text');
+    const refreshIcon = document.getElementById('refresh-icon');
+    syncBadge.className = 'sync-badge syncing';
+    syncText.textContent = 'Đang đồng bộ...';
+    refreshIcon?.classList.add('spin-icon');
+
+    try {
+      const res = await fetch('/api/state', { cache: 'no-store' });
+      if (!res.ok) throw new Error('Không thể nạp dữ liệu từ máy chủ.');
+      const data = await res.json();
+      dbRevision = data.revision;
+      dbState = data.state;
+      syncBadge.className = 'sync-badge';
+      syncText.textContent = `CSDL JSON (rev ${dbRevision}): Đã đồng bộ`;
+      populateProductCategories();
+      renderCurrentTab();
+    } catch (err) {
+      syncBadge.className = 'sync-badge error';
+      syncText.textContent = 'Mất kết nối CSDL';
+      showToast(err.message, 'danger');
+    } finally {
+      refreshIcon?.classList.remove('spin-icon');
+    }
+  }
+
+  async function commitDatabase(mutateFn) {
+    if (isSaving) throw new Error('Đang lưu dữ liệu, vui lòng thao tác chậm lại.');
+    isSaving = true;
+    const syncBadge = document.getElementById('sync-status');
+    const syncText = document.getElementById('sync-text');
+    syncBadge.className = 'sync-badge syncing';
+    syncText.textContent = 'Đang lưu vào JSON...';
+
+    try {
+      const freshRes = await fetch('/api/state', { cache: 'no-store' });
+      if (!freshRes.ok) throw new Error('Không thể kết nối máy chủ.');
+      const freshData = await freshRes.json();
+      dbRevision = freshData.revision;
+      dbState = freshData.state;
+
+      const result = mutateFn(dbState);
+
+      const putRes = await fetch('/api/state', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revision: dbRevision, state: dbState })
+      });
+
+      if (putRes.status === 409) {
+        const conflict = await putRes.json();
+        dbRevision = conflict.revision;
+        dbState = conflict.state;
+        renderCurrentTab();
+        throw new Error('Dữ liệu vừa được cập nhật ở phiên khác. Đã tự động đồng bộ lại, vui lòng thực hiện lại.');
+      }
+
+      if (!putRes.ok) throw new Error('Máy chủ không thể ghi dữ liệu.');
+      const savedData = await putRes.json();
+      dbRevision = savedData.revision;
+      dbState = savedData.state;
+
+      syncBadge.className = 'sync-badge';
+      syncText.textContent = `CSDL JSON (rev ${dbRevision}): Đã lưu`;
+      renderCurrentTab();
+      if (selectedOrderId) renderOrderDetail(selectedOrderId);
+      return result;
+    } catch (err) {
+      syncBadge.className = 'sync-badge error';
+      syncText.textContent = 'Lỗi lưu dữ liệu';
+      throw err;
+    } finally {
+      isSaving = false;
+    }
+  }
+
+  // Chuyển Tab
+  function switchTab(tabName) {
+    currentTab = tabName;
+    document.querySelectorAll('.sidebar-nav .nav-item').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tabName);
+    });
+    document.querySelectorAll('.tab-pane').forEach(pane => {
+      pane.style.display = 'none';
+    });
+    const activePane = document.getElementById(`pane-${tabName}`);
+    if (activePane) activePane.style.display = 'block';
+
+    const meta = {
+      orders: ['Quản lý Đơn hàng', 'Theo dõi, duyệt đơn, vận chuyển và xử lý hoàn tiền'],
+      dashboard: ['Tổng quan & Báo cáo', 'Các chỉ số vận hành và phễu chuyển đổi từ dữ liệu thật'],
+      returns: ['Đổi trả & Khiếu nại', 'Tiếp nhận phản hồi khách hàng, kiểm tra quy định 7 ngày và hoàn tồn kho'],
+      inventory: ['Quản lý Tồn kho Biến thể', 'Giám sát số lượng tồn khả dụng theo từng kích thước thiết kế'],
+      products: ['Danh mục Sản phẩm', 'Danh sách sản phẩm Việt Phục hiện hành và phân loại'],
+      reconciliation: ['Bảng Đối soát COD', 'Theo dõi tiền thu hộ, phí vận chuyển và số tiền thực nhận về cửa hàng']
+    };
+    const [title, sub] = meta[tabName] || ['Quản trị', ''];
+    document.getElementById('current-tab-title').textContent = title;
+    const subEl = document.getElementById('current-tab-subtitle');
+    if (subEl) subEl.textContent = sub;
+
+    toggleMobileSidebar(false);
+    renderCurrentTab();
+  }
+
+  function renderCurrentTab() {
+    updateBadges();
+    if (currentTab === 'orders') renderOrdersTable();
+    else if (currentTab === 'dashboard') renderDashboard();
+    else if (currentTab === 'returns') renderReturnsTable();
+    else if (currentTab === 'inventory') renderInventoryTable();
+    else if (currentTab === 'products') renderProductsTable();
+    else if (currentTab === 'reconciliation') renderReconciliationTable();
+  }
+
+  function updateBadges() {
+    const orders = dbState.orders || [];
+    const pendingOrders = orders.filter(o => o.status === 'Chờ xác nhận').length;
+    const pendingBadge = document.getElementById('pending-orders-badge');
+    if (pendingBadge) pendingBadge.textContent = pendingOrders;
+
+    const returnOrders = orders.filter(o => o.returnStatus && o.returnStatus !== 'Đã hoàn tất' && o.returnStatus !== 'Bị từ chối').length;
+    const returnsBadge = document.getElementById('returns-badge');
+    if (returnsBadge) returnsBadge.textContent = returnOrders;
+  }
+
+  // Status Badge Class Helpers
+  function getStatusBadgeHtml(status) {
+    let cls = 'pending';
+    if (status === 'Đã xác nhận' || status === 'Đã hoàn tất') cls = status === 'Đã hoàn tất' ? 'delivered' : 'confirmed';
+    else if (status === 'Đang giao') cls = 'shipping';
+    else if (status === 'Đã giao') cls = 'delivered';
+    else if (status === 'Giao thất bại' || status === 'Bị từ chối') cls = 'failed';
+    else if (status === 'Đang hoàn hàng') cls = 'returning';
+    else if (status === 'Đã hoàn hàng') cls = 'returned';
+    else if (status === 'Đã hủy') cls = 'cancelled';
+    return `<span class="status-pill ${cls}">${esc(status)}</span>`;
+  }
+
+  function getPaymentBadgeHtml(pStatus) {
+    let cls = 'unpaid';
+    if (pStatus === 'Thanh toán thành công') cls = 'paid';
+    else if (pStatus === 'Thanh toán thất bại') cls = 'failed';
+    else if (pStatus === 'Chờ hoàn tiền') cls = 'refunding';
+    else if (pStatus === 'Đã hoàn tiền' || pStatus === 'Đã hoàn toàn bộ') cls = 'refunded';
+    return `<span class="payment-pill ${cls}">${esc(pStatus)}</span>`;
+  }
+
+  function renderEmptyRow(colspan, title, desc, actionBtnHtml = '') {
+    return `
+      <tr>
+        <td colspan="${colspan}">
+          <div class="empty-state">
+            <div class="empty-state-icon">${icons.emptyBox}</div>
+            <h4>${esc(title)}</h4>
+            <p>${esc(desc)}</p>
+            ${actionBtnHtml}
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+
+  // TAB 1: ORDERS TABLE
+  function renderOrdersTable() {
+    const orders = (dbState.orders || []).slice().reverse();
+    const search = (document.getElementById('order-search')?.value || '').trim().toLowerCase();
+    const filterStatus = document.getElementById('filter-order-status')?.value || 'all';
+    const filterPayment = document.getElementById('filter-order-payment')?.value || 'all';
+    const filterMethod = document.getElementById('filter-order-method')?.value || 'all';
+
+    const hasActiveFilter = Boolean(search || filterStatus !== 'all' || filterPayment !== 'all' || filterMethod !== 'all');
+    const resetBtn = document.getElementById('btn-reset-order-filters');
+    if (resetBtn) resetBtn.style.display = hasActiveFilter ? 'inline-flex' : 'none';
+
+    const filtered = orders.filter(o => {
+      if (search) {
+        const matchesId = (o.id || '').toLowerCase().includes(search);
+        const matchesReceiver = (o.receiver || '').toLowerCase().includes(search);
+        const matchesPhone = (o.phone || '').toLowerCase().includes(search);
+        const matchesEmail = (o.email || '').toLowerCase().includes(search);
+        if (!matchesId && !matchesReceiver && !matchesPhone && !matchesEmail) return false;
+      }
+      if (filterStatus !== 'all' && o.status !== filterStatus) return false;
+      if (filterPayment !== 'all') {
+        if (filterPayment === 'Đã hoàn tiền' && (o.paymentStatus === 'Đã hoàn toàn bộ' || o.paymentStatus === 'Đã hoàn tiền')) {
+          // match
+        } else if (o.paymentStatus !== filterPayment) {
+          return false;
+        }
+      }
+      if (filterMethod !== 'all' && o.payment !== filterMethod) return false;
+      return true;
+    });
+
+    const countText = document.getElementById('orders-count-text');
+    if (countText) countText.textContent = `Hiển thị ${filtered.length} / ${orders.length} đơn hàng`;
+
+    const tbody = document.getElementById('orders-table-body');
+    if (!tbody) return;
+
+    if (!filtered.length) {
+      tbody.innerHTML = renderEmptyRow(
+        10,
+        orders.length ? 'Không tìm thấy đơn hàng phù hợp' : 'Chưa có đơn hàng nào',
+        orders.length
+          ? 'Thử thay đổi từ khóa tìm kiếm hoặc đặt lại các bộ lọc đang chọn.'
+          : 'Các đơn hàng mới được đặt từ cửa hàng Việt Phục sẽ hiển thị tại đây.',
+        hasActiveFilter ? `<button type="button" class="btn btn-outline btn-sm" id="empty-reset-order-filters">Xóa bộ lọc</button>` : ''
+      );
+      document.getElementById('empty-reset-order-filters')?.addEventListener('click', resetOrderFilters);
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(o => {
+      const itemsSummary = o.items.map(i => `${esc(i.name)} <span style="color:var(--text-muted)">(${esc(i.size)} × ${i.qty})</span>`).join('<br>');
+      return `
+        <tr>
+          <td><span class="order-code">${esc(o.id)}</span></td>
+          <td style="color: var(--text-muted); font-size: 12px; white-space: nowrap;">${esc(o.date)}</td>
+          <td>
+            <strong style="color: var(--text-main);">${esc(o.receiver || 'Chưa có tên')}</strong><br>
+            <span style="font-size: 12px; color: var(--text-muted);">${esc(o.phone || 'Chưa có SĐT')}</span>
+          </td>
+          <td style="max-width: 210px; font-size: 12.5px; color: var(--text-main);">${esc(o.address || 'Chưa có địa chỉ')}</td>
+          <td style="font-size: 12.5px; line-height: 1.45;">${itemsSummary}</td>
+          <td>
+            <strong style="color: var(--text-main);">${money(o.total)}</strong><br>
+            <small style="color: var(--text-muted);">${o.payment === 'COD' ? 'Thu hộ COD' : 'Trực tuyến'}</small>
+          </td>
+          <td>${getStatusBadgeHtml(o.status)}</td>
+          <td><span style="font-size: 12px; color: var(--text-muted);">${esc(o.shipStatus || 'Chờ bàn giao')}</span></td>
+          <td>${getPaymentBadgeHtml(o.paymentStatus || 'Chưa thanh toán')}</td>
+          <td class="text-right">
+            <button type="button" class="btn btn-outline btn-sm" data-action="open-order-detail" data-id="${esc(o.id)}">
+              <span>Xử lý đơn</span>
+              ${icons.arrowRight}
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function resetOrderFilters() {
+    const searchEl = document.getElementById('order-search');
+    const statusEl = document.getElementById('filter-order-status');
+    const payEl = document.getElementById('filter-order-payment');
+    const methodEl = document.getElementById('filter-order-method');
+    if (searchEl) searchEl.value = '';
+    if (statusEl) statusEl.value = 'all';
+    if (payEl) payEl.value = 'all';
+    if (methodEl) methodEl.value = 'all';
+    renderOrdersTable();
+  }
+
+  // Stepper trực quan cho Order Detail Drawer
+  function buildOrderStepper(o) {
+    const isCancelled = o.status === 'Đã hủy';
+    const isFailFlow = ['Giao thất bại', 'Đang hoàn hàng', 'Đã hoàn hàng'].includes(o.status);
+
+    let step = 1;
+    if (o.status === 'Đã xác nhận') step = 2;
+    else if (o.status === 'Đang giao') step = 3;
+    else if (o.status === 'Đã giao') step = 4;
+
+    if (isCancelled || isFailFlow) {
+      return `
+        <div class="order-stepper">
+          <div class="stepper-node done"><span class="stepper-dot">1</span><span>Tạo đơn</span></div>
+          <div class="stepper-node ${isFailFlow ? 'done' : 'error'}"><span class="stepper-dot">2</span><span>Xác nhận</span></div>
+          <div class="stepper-node ${isFailFlow ? 'error' : ''}"><span class="stepper-dot">3</span><span>${isFailFlow ? esc(o.status) : 'Vận chuyển'}</span></div>
+          <div class="stepper-node ${o.status === 'Đã hoàn hàng' || isCancelled ? 'error' : ''}"><span class="stepper-dot">4</span><span>${isCancelled ? 'Đã hủy' : 'Hoàn kho'}</span></div>
+        </div>
+      `;
+    }
+
+    const labels = ['Tạo đơn', 'Xác nhận', 'Đang giao', 'Hoàn tất'];
+    return `
+      <div class="order-stepper">
+        ${labels.map((label, idx) => {
+          const num = idx + 1;
+          const cls = num < step ? 'done' : (num === step ? (step === 4 ? 'done' : 'current') : '');
+          return `<div class="stepper-node ${cls}"><span class="stepper-dot">${cls === 'done' ? '✓' : num}</span><span>${label}</span></div>`;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  // ORDER DETAIL DRAWER (giữ nguyên 100% logic & ràng buộc nghiệp vụ)
+  function renderOrderDetail(orderId) {
+    selectedOrderId = orderId;
+    const o = (dbState.orders || []).find(x => x.id === orderId);
+    const container = document.getElementById('order-drawer-container');
+    if (!o || !container) return;
+
+    const subtotal = o.items.reduce((s, i) => s + (i.price * i.qty), 0);
+    const shippingFee = o.shippingFee ?? 30000;
+
+    // Ràng buộc Bug 4.2: Đơn online thanh toán thất bại / chưa thanh toán không cho bàn giao
+    const isOnline = o.payment === 'online';
+    const isPaid = o.paymentStatus === 'Thanh toán thành công';
+    const canShip = !isOnline || isPaid;
+
+    // Kiểm tra điều kiện hoàn tiền (Bug 4.4)
+    const canRefund = o.refund === 'Chờ hoàn tiền';
+
+    let actionControlsHtml = '';
+
+    if (o.status === 'Chờ xác nhận') {
+      actionControlsHtml = `
+        <div class="action-buttons">
+          <button type="button" class="btn btn-primary" data-action="order-step" data-step="confirm" data-id="${esc(o.id)}">
+            ${icons.check} Xác nhận đơn hàng
+          </button>
+          <button type="button" class="btn btn-danger" data-action="order-cancel" data-id="${esc(o.id)}">
+            ${icons.x} Hủy đơn hàng này
+          </button>
+        </div>
+      `;
+    } else if (o.status === 'Đã xác nhận') {
+      if (!canShip) {
+        actionControlsHtml = `
+          <div class="action-alert alert-danger">
+            <strong>CHẶN BÀN GIAO VẬN CHUYỂN:</strong> Đơn hàng thanh toán trực tuyến chưa hoàn tất thanh toán (Hiện tại: <strong>${esc(o.paymentStatus)}</strong>).
+            Theo quy định, chỉ bàn giao hàng cho đơn vị vận chuyển sau khi khách đã thanh toán thành công.
+          </div>
+          <div class="action-buttons">
+            <button type="button" class="btn btn-dark" disabled title="Khách chưa thanh toán online thành công">
+              ${icons.truck} Bàn giao vận chuyển (Đã khóa)
+            </button>
+            <button type="button" class="btn btn-danger" data-action="order-cancel" data-id="${esc(o.id)}">
+              ${icons.x} Hủy đơn
+            </button>
+          </div>
+        `;
+      } else {
+        actionControlsHtml = `
+          <div class="action-buttons">
+            <button type="button" class="btn btn-primary" data-action="order-step" data-step="ship" data-id="${esc(o.id)}">
+              ${icons.truck} Bàn giao cho đơn vị vận chuyển
+            </button>
+            <button type="button" class="btn btn-danger" data-action="order-cancel" data-id="${esc(o.id)}">
+              ${icons.x} Hủy đơn
+            </button>
+          </div>
+        `;
+      }
+    } else if (o.status === 'Đang giao') {
+      actionControlsHtml = `
+        <div class="action-alert alert-warning">
+          Đơn hàng đang trên đường vận chuyển tới khách hàng. Vui lòng cập nhật kết quả giao nhận bên dưới:
+        </div>
+        <div class="action-buttons">
+          <button type="button" class="btn btn-primary" data-action="order-step" data-step="delivered" data-id="${esc(o.id)}">
+            ${icons.check} Giao hàng thành công
+          </button>
+          <button type="button" class="btn btn-danger" data-action="order-step" data-step="failed" data-id="${esc(o.id)}">
+            ${icons.x} Giao hàng thất bại
+          </button>
+        </div>
+      `;
+    } else if (o.status === 'Giao thất bại') {
+      actionControlsHtml = `
+        <div class="action-alert alert-danger">
+          <strong>Đơn giao thất bại:</strong> Khách không nhận hàng hoặc không liên lạc được. Vui lòng chuyển sang quy trình hoàn hàng về kho.
+        </div>
+        <div class="action-buttons">
+          <button type="button" class="btn btn-primary" data-action="order-step" data-step="start-return" data-id="${esc(o.id)}">
+            ${icons.rotate} Xác nhận hàng đang chuyển hoàn về kho
+          </button>
+        </div>
+      `;
+    } else if (o.status === 'Đang hoàn hàng') {
+      actionControlsHtml = `
+        <div class="action-alert alert-warning">
+          <strong>Hàng đang chuyển hoàn:</strong> Đơn vị giao nhận đang chuyển trả kiện hàng về lại kho Việt Phục.
+        </div>
+        <div class="action-buttons">
+          <button type="button" class="btn btn-primary" data-action="order-step" data-step="restock-returned" data-id="${esc(o.id)}">
+            ${icons.boxIn} Đã nhận lại hàng hoàn & Nhập kho
+          </button>
+        </div>
+      `;
+    } else if (o.status === 'Đã hoàn hàng') {
+      actionControlsHtml = `
+        <div class="action-alert alert-success">
+          Đơn hàng đã được hoàn trả về kho và số lượng sản phẩm đã được cộng lại vào tồn khả dụng.
+        </div>
+      `;
+    } else if (o.status === 'Đã giao') {
+      actionControlsHtml = `
+        <div class="action-alert alert-success">
+          Đơn hàng đã giao thành công tới khách hàng.
+        </div>
+      `;
+    } else if (o.status === 'Đã hủy') {
+      actionControlsHtml = `
+        <div class="action-alert alert-warning">
+          Đơn hàng đã bị hủy. Số lượng giữ hàng đã được giải phóng về kho.
+        </div>
+      `;
+    }
+
+    // Hoàn tiền Section
+    let refundSectionHtml = '';
+    if (canRefund) {
+      refundSectionHtml = `
+        <div class="drawer-section" style="border-color: var(--danger-border); background: var(--danger-bg);">
+          <div class="drawer-section-title" style="color: var(--danger); border-bottom-color: var(--danger-border);">
+            <span>YÊU CẦU HOÀN TIỀN CHO KHÁCH</span>
+            <span class="payment-pill refunding">Chờ hoàn tiền</span>
+          </div>
+          <p style="font-size: 13px; margin-bottom: 12px; color: var(--text-main);">
+            Đơn hàng phát sinh hoàn trả hoặc hủy sau khi thanh toán. Số tiền cần hoàn: <strong>${money(o.total)}</strong>
+          </p>
+          <button type="button" class="btn btn-danger-solid" data-action="order-refund" data-id="${esc(o.id)}">
+            ${icons.refund} Xác nhận đã hoàn tiền (${money(o.total)})
+          </button>
+        </div>
+      `;
+    } else if (o.refund === 'Đã hoàn tiền (mô phỏng)' || o.paymentStatus === 'Đã hoàn tiền' || o.paymentStatus === 'Đã hoàn toàn bộ') {
+      refundSectionHtml = `
+        <div class="drawer-section" style="border-color: var(--success-border); background: var(--success-bg);">
+          <div class="drawer-section-title" style="color: var(--success); border-bottom-color: var(--success-border);">
+            <span>TIẾN TRÌNH HOÀN TIỀN</span>
+            <span class="payment-pill paid">Đã hoàn tất</span>
+          </div>
+          <p style="font-size: 13px; color: var(--success);">
+            Đã hoàn tiền thành công số tiền <strong>${money(o.total)}</strong> cho khách hàng.
+          </p>
+        </div>
+      `;
+    }
+
+    // Đổi trả Section nếu có
+    let returnSectionHtml = '';
+    if (o.returnStatus) {
+      returnSectionHtml = `
+        <div class="drawer-section" style="border-color: var(--warning-border); background: var(--warning-bg);">
+          <div class="drawer-section-title" style="color: var(--warning); border-bottom-color: var(--warning-border);">
+            <span>YÊU CẦU ĐỔI TRẢ & KHIẾU NẠI</span>
+            ${getStatusBadgeHtml(o.returnStatus)}
+          </div>
+          <div style="font-size: 13px; line-height: 1.6;">
+            <strong>Lý do từ khách hàng:</strong> ${esc(o.returnReason || 'Không có mô tả')}<br>
+            <small style="color: var(--text-muted);">Quy định: Tiếp nhận yêu cầu trong vòng 7 ngày kể từ khi nhận hàng.</small>
+          </div>
+          ${o.returnStatus !== 'Đã hoàn tất' && o.returnStatus !== 'Bị từ chối' ? `
+            <div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px;">
+              <button type="button" class="btn btn-primary btn-sm" data-action="return-approve" data-id="${esc(o.id)}">
+                ${icons.check} Chấp thuận & Nhập lại hàng
+              </button>
+              <button type="button" class="btn btn-outline btn-sm" data-action="return-reject" data-id="${esc(o.id)}">
+                ${icons.x} Từ chối yêu cầu
+              </button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    // Render items
+    const itemsHtml = o.items.map(i => {
+      const p = dbState.products.find(x => x.id === i.id) || {};
+      return `
+        <div class="order-item-row">
+          <img src="${esc(p.img || 'assets/accessory.png')}" class="order-item-img" alt="${esc(i.name)}">
+          <div class="order-item-details">
+            <div class="order-item-name">${esc(i.name)}</div>
+            <div class="order-item-meta">Màu: ${esc(i.color || p.color || 'Mặc định')} · Size: <strong>${esc(i.size)}</strong></div>
+            <div style="font-size: 12.5px; margin-top: 4px; color: var(--text-main);">
+              ${money(i.price)} × <strong>${i.qty}</strong> = <strong>${money(i.price * i.qty)}</strong>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Timeline history
+    const historyHtml = (o.history || []).map(h => `
+      <div class="timeline-item">
+        <span>${esc(h)}</span>
+      </div>
+    `).join('');
+
+    container.innerHTML = `
+      <div class="admin-modal-overlay" data-action="close-order-detail">
+        <aside class="admin-drawer" role="dialog" aria-modal="true" aria-label="Chi tiết đơn hàng ${esc(o.id)}" onclick="event.stopPropagation()">
+          <header class="drawer-header">
+            <div>
+              <h3>Đơn hàng ${esc(o.id)}</h3>
+              <div class="drawer-header-meta">
+                <small style="color: var(--text-muted);">${esc(o.date)}</small>
+                ${getStatusBadgeHtml(o.status)}
+                ${getPaymentBadgeHtml(o.paymentStatus || 'Chưa thanh toán')}
+              </div>
+            </div>
+            <button type="button" class="drawer-close" data-action="close-order-detail" title="Đóng (Esc)" aria-label="Đóng chi tiết đơn hàng">&times;</button>
+          </header>
+
+          <div class="drawer-body">
+            ${buildOrderStepper(o)}
+
+            <div class="action-panel">
+              <div class="drawer-section-title" style="border-bottom-color: rgba(185,154,98,0.28);">QUY TRÌNH XỬ LÝ ĐƠN HÀNG</div>
+              ${actionControlsHtml}
+            </div>
+
+            ${refundSectionHtml}
+            ${returnSectionHtml}
+
+            <div class="drawer-section">
+              <div class="drawer-section-title">THÔNG TIN GIAO HÀNG & LIÊN HỆ</div>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span>NGƯỜI NHẬN</span>
+                  <strong>${esc(o.receiver || 'Chưa cung cấp')}</strong>
+                </div>
+                <div class="info-item">
+                  <span>SỐ ĐIỆN THOẠI</span>
+                  <strong>${esc(o.phone || 'Chưa cung cấp')}</strong>
+                </div>
+                <div class="info-item" style="grid-column: 1 / -1;">
+                  <span>ĐỊA CHỈ NHẬN HÀNG CHI TIẾT</span>
+                  <strong>${esc(o.address || 'Chưa cung cấp')}</strong>
+                </div>
+                <div class="info-item">
+                  <span>EMAIL TÀI KHOẢN</span>
+                  <span>${esc(o.email || 'Khách vãng lai')}</span>
+                </div>
+                <div class="info-item">
+                  <span>PHƯƠNG THỨC GIAO HÀNG</span>
+                  <span>${shippingFee === 45000 ? 'Giao hàng nhanh (45.000₫)' : 'Giao hàng tiêu chuẩn (30.000₫)'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="drawer-section">
+              <div class="drawer-section-title">SẢN PHẨM & TỔNG THANH TOÁN</div>
+              <div class="order-items-list">${itemsHtml}</div>
+              <div style="border-top: 1px solid var(--border); margin-top: 14px; padding-top: 12px; font-size: 13px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                  <span style="color: var(--text-muted);">Tiền hàng</span>
+                  <span>${money(subtotal)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                  <span style="color: var(--text-muted);">Phí giao hàng</span>
+                  <span>${money(shippingFee)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 15.5px; font-weight: 700; color: var(--text-main); margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border);">
+                  <span>Tổng thanh toán</span>
+                  <span style="color: var(--brand-burgundy); font-family: var(--font-serif); font-size: 17px;">${money(o.total)}</span>
+                </div>
+                <div style="margin-top: 10px; font-size: 12px; color: var(--text-muted);">
+                  Phương thức: <strong>${o.payment === 'COD' ? 'Thu tiền khi nhận hàng (COD mô phỏng)' : 'Chuyển khoản trực tuyến mô phỏng'}</strong>
+                  · Vận chuyển: <strong>${esc(o.shipStatus || 'Chờ bàn giao')}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="drawer-section">
+              <div class="drawer-section-title">LỊCH SỬ THAO TÁC & AUDIT TRAIL</div>
+              <div class="timeline">
+                ${historyHtml || '<span style="color:var(--text-muted);font-size:12.5px;">Chưa có lịch sử ghi nhận.</span>'}
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    `;
+  }
+
+  function closeOrderDetail() {
+    selectedOrderId = null;
+    const container = document.getElementById('order-drawer-container');
+    if (container) container.innerHTML = '';
+  }
+
+  // TAB 2: DASHBOARD (sử dụng 100% dữ liệu thật từ dbState)
+  function renderDashboard() {
+    const orders = dbState.orders || [];
+    const totalOrders = orders.length;
+    const pendingOrders = orders.filter(o => o.status === 'Chờ xác nhận').length;
+    const deliveredOrders = orders.filter(o => o.status === 'Đã giao').length;
+    const totalRevenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
+
+    document.getElementById('dash-total-orders').textContent = totalOrders;
+    document.getElementById('dash-pending-orders').textContent = pendingOrders;
+    document.getElementById('dash-delivered-orders').textContent = deliveredOrders;
+    document.getElementById('dash-total-revenue').textContent = money(totalRevenue);
+
+    const visits = dbState.visits || 0;
+    const cartEvents = dbState.cartEvents || 0;
+    document.getElementById('dash-visits').textContent = visits;
+    document.getElementById('dash-cart-events').textContent = cartEvents;
+    document.getElementById('dash-funnel-orders').textContent = totalOrders;
+    document.getElementById('dash-funnel-delivered').textContent = deliveredOrders;
+
+    const rate = visits > 0 ? ((totalOrders / visits) * 100).toFixed(1) + '%' : '0%';
+    document.getElementById('dash-conversion-rate').textContent = rate;
+
+    // Thanh tiến trình phễu chuyển đổi thật
+    const baseMax = Math.max(visits, cartEvents, totalOrders, 1);
+    const setBar = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.style.width = Math.min(100, Math.round((val / baseMax) * 100)) + '%';
+    };
+    setBar('funnel-bar-visits', visits);
+    setBar('funnel-bar-carts', cartEvents);
+    setBar('funnel-bar-orders', totalOrders);
+    setBar('funnel-bar-delivered', deliveredOrders);
+
+    // Cơ cấu đơn hàng & thanh toán thật
+    const breakdownBody = document.getElementById('dash-breakdown-body');
+    if (breakdownBody) {
+      if (!totalOrders) {
+        breakdownBody.innerHTML = `
+          <div class="empty-state" style="padding: 24px 12px;">
+            <div class="empty-state-icon">${icons.emptyBox}</div>
+            <h4>Chưa có dữ liệu đơn hàng</h4>
+            <p style="margin-bottom:0;">Khi có đơn hàng từ cửa hàng, cơ cấu COD/Online và trạng thái sẽ hiển thị tại đây.</p>
+          </div>
+        `;
+      } else {
+        const codCount = orders.filter(o => o.payment === 'COD').length;
+        const onlineCount = orders.filter(o => o.payment === 'online').length;
+        const shippingCount = orders.filter(o => o.status === 'Đang giao' || o.status === 'Đã xác nhận').length;
+        const issueCount = orders.filter(o => ['Giao thất bại', 'Đang hoàn hàng', 'Đã hoàn hàng', 'Đã hủy'].includes(o.status)).length;
+        const pct = count => Math.round((count / totalOrders) * 100);
+
+        breakdownBody.innerHTML = `
+          <div class="breakdown-grid">
+            <div class="breakdown-row">
+              <span class="breakdown-label"><span class="dot-swatch" style="background: var(--brand-burgundy);"></span>Thanh toán COD</span>
+              <strong>${codCount} đơn (${pct(codCount)}%)</strong>
+            </div>
+            <div class="breakdown-row">
+              <span class="breakdown-label"><span class="dot-swatch" style="background: var(--brand-gold);"></span>Thanh toán trực tuyến</span>
+              <strong>${onlineCount} đơn (${pct(onlineCount)}%)</strong>
+            </div>
+            <div class="breakdown-row">
+              <span class="breakdown-label"><span class="dot-swatch" style="background: var(--info);"></span>Đang xử lý & vận chuyển</span>
+              <strong>${shippingCount} đơn (${pct(shippingCount)}%)</strong>
+            </div>
+            <div class="breakdown-row">
+              <span class="breakdown-label"><span class="dot-swatch" style="background: var(--brand-terracotta);"></span>Hủy / Giao thất bại / Hoàn hàng</span>
+              <strong>${issueCount} đơn (${pct(issueCount)}%)</strong>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    const recentOrders = orders.slice(-5).reverse();
+    const tbody = document.getElementById('dash-recent-orders-body');
+    if (!tbody) return;
+
+    if (!recentOrders.length) {
+      tbody.innerHTML = renderEmptyRow(5, 'Chưa có đơn hàng gần đây', 'Các đơn mới phát sinh sẽ được liệt kê tại bảng này.');
+      return;
+    }
+
+    tbody.innerHTML = recentOrders.map(o => `
+      <tr>
+        <td><span class="order-code">${esc(o.id)}</span></td>
+        <td>
+          <strong>${esc(o.receiver || o.email || 'Khách hàng')}</strong>
+          ${o.phone ? `<br><small style="color: var(--text-muted);">${esc(o.phone)}</small>` : ''}
+        </td>
+        <td><strong>${money(o.total)}</strong></td>
+        <td>${getStatusBadgeHtml(o.status)}</td>
+        <td class="text-right">
+          <button type="button" class="btn btn-outline btn-sm" data-action="open-order-detail" data-id="${esc(o.id)}">
+            Chi tiết ${icons.arrowRight}
+          </button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  // TAB 3: RETURNS
+  function renderReturnsTable() {
+    const returns = (dbState.orders || []).filter(o => o.returnStatus);
+    const countEl = document.getElementById('returns-count-text');
+    if (countEl) countEl.textContent = `${returns.length} yêu cầu`;
+
+    const tbody = document.getElementById('returns-table-body');
+    if (!tbody) return;
+
+    if (!returns.length) {
+      tbody.innerHTML = renderEmptyRow(7, 'Không có yêu cầu đổi trả', 'Hiện chưa có đơn hàng nào phát sinh khiếu nại hoặc yêu cầu đổi trả.');
+      return;
+    }
+
+    tbody.innerHTML = returns.map(o => {
+      const itemsList = o.items.map(i => `${esc(i.name)} (${esc(i.size)}) × ${i.qty}`).join(', ');
+      const canProcess = o.returnStatus !== 'Đã hoàn tất' && o.returnStatus !== 'Bị từ chối';
+      return `
+        <tr>
+          <td><span class="order-code">${esc(o.id)}</span></td>
+          <td>
+            <strong>${esc(o.receiver || 'Khách hàng')}</strong><br>
+            <small style="color: var(--text-muted);">${esc(o.phone || '')}</small>
+          </td>
+          <td style="font-size: 12.5px;">${itemsList}</td>
+          <td style="max-width: 240px;">${esc(o.returnReason || 'Không có mô tả')}</td>
+          <td>${getStatusBadgeHtml(o.returnStatus)}</td>
+          <td>${getPaymentBadgeHtml(o.refund || 'Chưa hoàn')}</td>
+          <td class="text-right">
+            <div style="display:inline-flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+              ${canProcess ? `
+                <button type="button" class="btn btn-primary btn-sm" data-action="return-approve" data-id="${esc(o.id)}" title="Duyệt và nhập kho">
+                  ${icons.check} Duyệt
+                </button>
+                <button type="button" class="btn btn-danger btn-sm" data-action="return-reject" data-id="${esc(o.id)}" title="Từ chối yêu cầu">
+                  ${icons.x} Từ chối
+                </button>
+              ` : ''}
+              <button type="button" class="btn btn-outline btn-sm" data-action="open-order-detail" data-id="${esc(o.id)}">
+                Chi tiết
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // TAB 4: INVENTORY
+  function renderInventoryTable() {
+    const products = dbState.products || [];
+    const statusFilter = document.getElementById('filter-inventory-status')?.value || 'all';
+    const tbody = document.getElementById('inventory-table-body');
+    if (!tbody) return;
+
+    const rows = products.filter(p => {
+      const sizes = p.sizes || ['S', 'M', 'L', 'XL'];
+      const qtys = sizes.map(s => getAvailableStock(p.id, s));
+      if (statusFilter === 'low') return qtys.some(q => q > 0 && q < 3);
+      if (statusFilter === 'out') return qtys.some(q => q === 0);
+      return true;
+    });
+
+    if (!rows.length) {
+      tbody.innerHTML = renderEmptyRow(6, 'Không có biến thể phù hợp', 'Không có sản phẩm nào nằm trong nhóm cảnh báo tồn kho đã chọn.');
+      return;
+    }
+
+    tbody.innerHTML = rows.map(p => {
+      const sizes = p.sizes || ['S', 'M', 'L', 'XL'];
+      let totalStock = 0;
+      const sizeTags = sizes.map(s => {
+        const qty = getAvailableStock(p.id, s);
+        totalStock += qty;
+        const cls = qty === 0 ? 'out' : (qty < 3 ? 'low' : 'ok');
+        const note = qty === 0 ? ' · Hết' : (qty < 3 ? ' · Sắp hết' : '');
+        return `<span class="stock-chip ${cls}"><strong>${esc(s)}:</strong> ${qty}${note}</span>`;
+      }).join('');
+
+      return `
+        <tr>
+          <td><img src="${esc(p.img)}" class="product-thumb" alt="${esc(p.name)}"></td>
+          <td><strong>${esc(p.name)}</strong><br><small style="color:var(--text-muted);">${esc(p.id)}</small></td>
+          <td>${esc(p.category)}</td>
+          <td>
+            <span class="color-chip">
+              <span class="color-chip-dot" style="background:${colorSwatches[p.color] || '#B99A62'}"></span>
+              ${esc(p.color)}
+            </span>
+          </td>
+          <td><div class="size-stock-list">${sizeTags}</div></td>
+          <td class="text-right"><strong style="font-family: var(--font-serif); font-size: 18px; color: var(--text-main);">${totalStock}</strong></td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // TAB 5: PRODUCTS
+  function populateProductCategories() {
+    const select = document.getElementById('filter-product-category');
+    if (!select) return;
+    const current = select.value || 'all';
+    const categories = [...new Set((dbState.products || []).map(p => p.category).filter(Boolean))];
+    select.innerHTML = `<option value="all">Tất cả danh mục</option>` +
+      categories.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    if ([...select.options].some(o => o.value === current)) select.value = current;
+  }
+
+  function renderProductsTable() {
+    const products = dbState.products || [];
+    const search = (document.getElementById('product-search')?.value || '').trim().toLowerCase();
+    const catFilter = document.getElementById('filter-product-category')?.value || 'all';
+    const tbody = document.getElementById('products-table-body');
+    if (!tbody) return;
+
+    const filtered = products.filter(p => {
+      if (catFilter !== 'all' && p.category !== catFilter) return false;
+      if (search) {
+        const hay = `${p.id} ${p.name} ${p.category} ${p.material} ${p.color}`.toLowerCase();
+        if (!hay.includes(search)) return false;
+      }
+      return true;
+    });
+
+    if (!filtered.length) {
+      tbody.innerHTML = renderEmptyRow(8, 'Không tìm thấy sản phẩm', 'Không có sản phẩm nào khớp với từ khóa hoặc danh mục đang chọn.');
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(p => {
+      const sizes = p.sizes || ['S', 'M', 'L', 'XL'];
+      const totalStock = sizes.reduce((sum, s) => sum + getAvailableStock(p.id, s), 0);
+      return `
+        <tr>
+          <td><span class="order-code">${esc(p.id)}</span></td>
+          <td><img src="${esc(p.img)}" class="product-thumb" alt="${esc(p.name)}"></td>
+          <td>
+            <strong>${esc(p.name)}</strong>
+            <br><small style="color: var(--text-muted);">Size: ${sizes.map(esc).join(', ')}</small>
+          </td>
+          <td>${esc(p.category)}</td>
+          <td>
+            <strong>${money(p.price)}</strong>
+            ${p.old ? `<br><del style="font-size:11.5px; color:var(--text-muted);">${money(p.old)}</del>` : ''}
+          </td>
+          <td>
+            <div>${esc(p.material)}</div>
+            <span class="color-chip" style="color: var(--text-muted); font-size: 12px;">
+              <span class="color-chip-dot" style="background:${colorSwatches[p.color] || '#B99A62'}"></span>
+              ${esc(p.color)}
+            </span>
+          </td>
+          <td><span class="badge" style="background: var(--bg-main); border: 1px solid var(--border); color: var(--text-main);">${esc(p.tag || 'Mặc định')}</span></td>
+          <td class="text-right"><strong>${totalStock}</strong> <small style="color: var(--text-muted);">sp</small></td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // TAB 6: RECONCILIATION (giữ nguyên công thức tính hiện tại)
+  function renderReconciliationTable() {
+    const codOrders = (dbState.orders || []).filter(o => o.payment === 'COD' && o.status === 'Đã giao');
+    const summaryEl = document.getElementById('reconciliation-summary');
+    const tbody = document.getElementById('reconciliation-table-body');
+    if (!tbody) return;
+
+    const totalCod = codOrders.reduce((s, o) => s + (o.total || 0), 0);
+    const totalShip = codOrders.reduce((s, o) => s + (o.shippingFee ?? 30000), 0);
+    const totalActual = codOrders.reduce((s, o) => s + Math.max(0, (o.total || 0) - (o.shippingFee ?? 30000)), 0);
+    const unsettledCount = codOrders.filter(o => o.settlement !== 'Đã thực nhận tiền (mô phỏng)').length;
+
+    if (summaryEl) {
+      summaryEl.innerHTML = `
+        <div class="stat-card">
+          <div class="stat-top"><span class="stat-label">Tổng thu hộ COD</span></div>
+          <div class="stat-value">${money(totalCod)}</div>
+          <div class="stat-sub">${codOrders.length} đơn COD đã giao thành công</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top"><span class="stat-label">Tổng phí vận chuyển</span></div>
+          <div class="stat-value" style="color: var(--brand-terracotta);">${money(totalShip)}</div>
+          <div class="stat-sub">Khấu trừ từ tiền thu hộ</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top"><span class="stat-label">Thực nhận về shop</span></div>
+          <div class="stat-value" style="color: var(--success);">${money(totalActual)}</div>
+          <div class="stat-sub">Công thức: Thu hộ − Phí ship</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top"><span class="stat-label">Chờ đối soát</span></div>
+          <div class="stat-value" style="color: var(--warning);">${unsettledCount}</div>
+          <div class="stat-sub">Đơn chưa xác nhận thực nhận</div>
+        </div>
+      `;
+    }
+
+    if (!codOrders.length) {
+      tbody.innerHTML = renderEmptyRow(7, 'Chưa có đơn COD cần đối soát', 'Các đơn COD sau khi giao thành công sẽ xuất hiện trong bảng đối soát tại đây.');
+      return;
+    }
+
+    tbody.innerHTML = codOrders.map(o => {
+      const shipFee = o.shippingFee ?? 30000;
+      const actualReceived = Math.max(0, o.total - shipFee);
+      const isSettled = o.settlement === 'Đã thực nhận tiền (mô phỏng)';
+      return `
+        <tr>
+          <td><span class="order-code">${esc(o.id)}</span></td>
+          <td>
+            <strong>${esc(o.receiver || 'Khách hàng')}</strong><br>
+            <small style="color: var(--text-muted);">${esc(o.phone || '')}</small>
+          </td>
+          <td class="text-right"><strong>${money(o.total)}</strong></td>
+          <td class="text-right" style="color: var(--danger); font-size: 12.5px;">−${money(shipFee)}</td>
+          <td class="text-right"><strong style="color: var(--success); font-size: 14px;">${money(actualReceived)}</strong></td>
+          <td>
+            <span class="status-pill ${isSettled ? 'delivered' : 'pending'}">
+              ${isSettled ? 'Đã đối soát' : 'Chưa đối soát'}
+            </span>
+          </td>
+          <td class="text-right">
+            ${!isSettled ? `
+              <button type="button" class="btn btn-primary btn-sm" data-action="order-settle" data-id="${esc(o.id)}">
+                ${icons.check} Xác nhận đã nhận tiền
+              </button>
+            ` : '<span style="color: var(--text-muted); font-size: 12px;">Đã hoàn tất</span>'}
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // Event Listeners
+  document.addEventListener('DOMContentLoaded', () => {
+    checkSession();
+
+    // Toggle Password Visibility
+    document.getElementById('toggle-password-btn')?.addEventListener('click', () => {
+      const input = document.getElementById('login-password');
+      const btn = document.getElementById('toggle-password-btn');
+      if (!input || !btn) return;
+      const isHidden = input.type === 'password';
+      input.type = isHidden ? 'text' : 'password';
+      btn.innerHTML = isHidden ? icons.eyeOff : icons.eye;
+    });
+
+    // Login Form Submit
+    document.getElementById('admin-login-form')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const form = e.target;
+      const username = form.username.value.trim();
+      const password = form.password.value;
+      await login(username, password);
+    });
+
+    // Logout có xác nhận gọn gàng
+    document.getElementById('admin-logout-btn')?.addEventListener('click', async () => {
+      const ok = await showConfirmDialog({
+        title: 'Đăng xuất quản trị',
+        message: 'Bạn có muốn kết thúc phiên làm việc hiện tại trên trang quản trị Việt Phục?',
+        confirmText: 'Đăng xuất',
+        cancelText: 'Ở lại'
+      });
+      if (ok) await logout();
+    });
+
+    // Mobile sidebar controls
+    document.getElementById('mobile-menu-toggle')?.addEventListener('click', () => toggleMobileSidebar(true));
+    document.getElementById('sidebar-close-btn')?.addEventListener('click', () => toggleMobileSidebar(false));
+    document.getElementById('sidebar-backdrop')?.addEventListener('click', () => toggleMobileSidebar(false));
+
+    // Refresh Data
+    document.getElementById('btn-refresh-data')?.addEventListener('click', async () => {
+      await loadDatabase();
+      showToast('Đã cập nhật dữ liệu mới nhất!', 'success');
+    });
+
+    // Sidebar navigation tabs
+    document.querySelectorAll('.sidebar-nav .nav-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        switchTab(btn.dataset.tab);
+      });
+    });
+
+    // Dashboard shortcut
+    document.getElementById('dash-view-all-orders')?.addEventListener('click', () => switchTab('orders'));
+
+    // Filters
+    document.getElementById('order-search')?.addEventListener('input', renderOrdersTable);
+    document.getElementById('filter-order-status')?.addEventListener('change', renderOrdersTable);
+    document.getElementById('filter-order-payment')?.addEventListener('change', renderOrdersTable);
+    document.getElementById('filter-order-method')?.addEventListener('change', renderOrdersTable);
+    document.getElementById('btn-reset-order-filters')?.addEventListener('click', resetOrderFilters);
+
+    document.getElementById('filter-inventory-status')?.addEventListener('change', renderInventoryTable);
+    document.getElementById('product-search')?.addEventListener('input', renderProductsTable);
+    document.getElementById('filter-product-category')?.addEventListener('change', renderProductsTable);
+
+    // Đóng Drawer / Dialog / Sidebar bằng phím Escape
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape') return;
+      if (activeDialogResolve) {
+        closeDialog(null);
+        return;
+      }
+      if (selectedOrderId) {
+        closeOrderDetail();
+        return;
+      }
+      toggleMobileSidebar(false);
+    });
+
+    // Click handler cho các hành động nghiệp vụ (giữ nguyên toàn bộ nghiệp vụ)
+    document.addEventListener('click', async e => {
+      const el = e.target.closest('[data-action]');
+      if (!el) return;
+      const action = el.dataset.action;
+      const orderId = el.dataset.id;
+
+      if (action === 'open-order-detail') {
+        renderOrderDetail(orderId);
+        return;
+      }
+
+      if (action === 'close-order-detail') {
+        closeOrderDetail();
+        return;
+      }
+
+      // Xử lý các bước đơn hàng
+      if (action === 'order-step') {
+        const step = el.dataset.step;
+        if (step === 'failed') {
+          const ok = await showConfirmDialog({
+            title: 'Xác nhận giao thất bại',
+            message: `Đánh dấu đơn hàng ${orderId} giao không thành công để chuyển sang quy trình hoàn hàng?`,
+            confirmText: 'Xác nhận thất bại',
+            danger: true
+          });
+          if (!ok) return;
+        }
+
+        el.classList.add('is-loading');
+        try {
+          await commitDatabase(state => {
+            const o = state.orders.find(x => x.id === orderId);
+            if (!o) throw new Error('Không tìm thấy đơn hàng.');
+
+            if (step === 'confirm' && o.status === 'Chờ xác nhận') {
+              o.status = 'Đã xác nhận';
+              o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Admin đã xác nhận đơn`);
+            } else if (step === 'ship' && o.status === 'Đã xác nhận') {
+              if (o.payment === 'online' && o.paymentStatus !== 'Thanh toán thành công') {
+                throw new Error('Chặn thao tác: Đơn hàng thanh toán trực tuyến chưa hoàn tất thanh toán.');
+              }
+              o.status = 'Đang giao';
+              o.shipStatus = 'Đang vận chuyển';
+              o.inventory = 'issued';
+              o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Bàn giao cho đơn vị vận chuyển`);
+            } else if (step === 'delivered' && o.status === 'Đang giao') {
+              o.status = 'Đã giao';
+              o.shipStatus = 'Giao thành công';
+              if (o.payment === 'COD') o.paymentStatus = 'Thanh toán thành công';
+              o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Giao hàng thành công cho người nhận`);
+            } else if (step === 'failed' && o.status === 'Đang giao') {
+              o.status = 'Giao thất bại';
+              o.shipStatus = 'Giao thất bại';
+              o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Giao hàng thất bại (khách vắng mặt / từ chối)`);
+            } else if (step === 'start-return' && o.status === 'Giao thất bại') {
+              o.status = 'Đang hoàn hàng';
+              o.shipStatus = 'Đang chuyển hoàn';
+              o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Bắt đầu quy trình chuyển kiện hàng hoàn về kho`);
+            } else if (step === 'restock-returned' && o.status === 'Đang hoàn hàng') {
+              o.items.forEach(i => modifyStock(i.id, i.size, i.qty));
+              o.status = 'Đã hoàn hàng';
+              o.shipStatus = 'Đã nhận hàng hoàn';
+              o.inventory = 'returned';
+              if (o.paymentStatus === 'Thanh toán thành công') {
+                o.refund = 'Chờ hoàn tiền';
+              }
+              o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Đã nhận lại hàng hoàn về kho và cập nhật số lượng tồn khả dụng`);
+            } else {
+              throw new Error('Trạng thái đơn hàng không hợp lệ cho thao tác này.');
+            }
+          });
+          showToast('Đã cập nhật trạng thái đơn hàng!', 'success');
+        } catch (err) {
+          showToast(err.message, 'danger');
+        } finally {
+          el.classList.remove('is-loading');
+        }
+        return;
+      }
+
+      // Hủy đơn hàng từ phía Admin
+      if (action === 'order-cancel') {
+        const ok = await showConfirmDialog({
+          title: 'Xác nhận hủy đơn hàng',
+          message: `Bạn có chắc chắn muốn hủy đơn ${orderId}? Số lượng hàng giữ sẽ được giải phóng lại về kho.`,
+          confirmText: 'Hủy đơn hàng',
+          danger: true
+        });
+        if (!ok) return;
+
+        el.classList.add('is-loading');
+        try {
+          await commitDatabase(state => {
+            const o = state.orders.find(x => x.id === orderId);
+            if (!o) throw new Error('Không tìm thấy đơn hàng.');
+            if (o.status === 'Đã hủy') throw new Error('Đơn hàng đã được hủy trước đó.');
+            if (o.inventory === 'reserved') {
+              o.items.forEach(i => modifyStock(i.id, i.size, i.qty));
+              o.inventory = 'released';
+            }
+            o.status = 'Đã hủy';
+            if (o.paymentStatus === 'Thanh toán thành công') {
+              o.refund = 'Chờ hoàn tiền';
+            }
+            o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Admin hủy đơn và giải phóng tồn kho`);
+          });
+          showToast('Đã hủy đơn hàng và hoàn lại số lượng tồn kho.', 'success');
+        } catch (err) {
+          showToast(err.message, 'danger');
+        } finally {
+          el.classList.remove('is-loading');
+        }
+        return;
+      }
+
+      // Hoàn tiền (Refund)
+      if (action === 'order-refund') {
+        const ok = await showConfirmDialog({
+          title: 'Xác nhận hoàn tiền',
+          message: `Xác nhận đã hoàn tất hoàn tiền mô phỏng cho đơn hàng ${orderId}?`,
+          confirmText: 'Đã hoàn tiền',
+          danger: true
+        });
+        if (!ok) return;
+
+        el.classList.add('is-loading');
+        try {
+          await commitDatabase(state => {
+            const o = state.orders.find(x => x.id === orderId);
+            if (!o) throw new Error('Không tìm thấy đơn hàng.');
+            o.refund = 'Đã hoàn tiền (mô phỏng)';
+            o.paymentStatus = 'Đã hoàn tiền';
+            o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Admin xác nhận đã hoàn tiền ${money(o.total)} cho khách hàng`);
+          });
+          showToast('Đã xác nhận hoàn tiền thành công!', 'success');
+        } catch (err) {
+          showToast(err.message, 'danger');
+        } finally {
+          el.classList.remove('is-loading');
+        }
+        return;
+      }
+
+      // Xử lý Đổi trả
+      if (action === 'return-approve') {
+        const ok = await showConfirmDialog({
+          title: 'Chấp thuận đổi trả',
+          message: `Xác nhận duyệt yêu cầu đổi trả cho đơn ${orderId}, nhập lại hàng vào kho và chuyển sang chờ hoàn tiền?`,
+          confirmText: 'Duyệt đổi trả'
+        });
+        if (!ok) return;
+
+        el.classList.add('is-loading');
+        try {
+          await commitDatabase(state => {
+            const o = state.orders.find(x => x.id === orderId);
+            if (!o) throw new Error('Không tìm thấy đơn hàng.');
+            if (o.inventory === 'issued') {
+              o.items.forEach(i => modifyStock(i.id, i.size, i.qty));
+              o.inventory = 'returned';
+            }
+            o.returnStatus = 'Đã hoàn tất';
+            o.refund = 'Chờ hoàn tiền';
+            o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Chấp thuận đổi trả, đã nhận lại hàng và hoàn tồn kho`);
+          });
+          showToast('Đã chấp thuận yêu cầu đổi trả và cập nhật kho hàng.', 'success');
+        } catch (err) {
+          showToast(err.message, 'danger');
+        } finally {
+          el.classList.remove('is-loading');
+        }
+        return;
+      }
+
+      if (action === 'return-reject') {
+        const reason = await showPromptDialog({
+          title: 'Từ chối yêu cầu đổi trả',
+          message: `Nhập lý do từ chối yêu cầu đổi trả cho đơn ${orderId}:`,
+          placeholder: 'Ví dụ: Quá thời hạn 7 ngày hoặc sản phẩm đã qua sử dụng',
+          defaultValue: 'Không thỏa mãn điều kiện chính sách 7 ngày',
+          confirmText: 'Xác nhận từ chối'
+        });
+        if (!reason) return;
+
+        el.classList.add('is-loading');
+        try {
+          await commitDatabase(state => {
+            const o = state.orders.find(x => x.id === orderId);
+            if (!o) throw new Error('Không tìm thấy đơn hàng.');
+            o.returnStatus = 'Bị từ chối';
+            o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Từ chối đổi trả: ${reason}`);
+          });
+          showToast('Đã từ chối yêu cầu đổi trả.', 'info');
+        } catch (err) {
+          showToast(err.message, 'danger');
+        } finally {
+          el.classList.remove('is-loading');
+        }
+        return;
+      }
+
+      // Đối soát COD
+      if (action === 'order-settle') {
+        const ok = await showConfirmDialog({
+          title: 'Xác nhận đối soát COD',
+          message: `Ghi nhận cửa hàng đã thực nhận tiền thu hộ cho đơn ${orderId}?`,
+          confirmText: 'Xác nhận đã nhận tiền'
+        });
+        if (!ok) return;
+
+        el.classList.add('is-loading');
+        try {
+          await commitDatabase(state => {
+            const o = state.orders.find(x => x.id === orderId);
+            if (!o) throw new Error('Không tìm thấy đơn hàng.');
+            o.settlement = 'Đã thực nhận tiền (mô phỏng)';
+            o.history.push(`${new Date().toLocaleTimeString('vi-VN')} - Đã chốt đối soát COD và thực nhận tiền`);
+          });
+          showToast('Đã ghi nhận đối soát COD thành công!', 'success');
+        } catch (err) {
+          showToast(err.message, 'danger');
+        } finally {
+          el.classList.remove('is-loading');
+        }
+        return;
+      }
+    });
+  });
+
+})();
