@@ -622,7 +622,10 @@
     if(action==='filter-reset'){el.closest('form')?.querySelectorAll('input[type="checkbox"]').forEach(input=>{input.checked=false;});return;}
     if(action==='mobile-menu'){const nav=document.querySelector('.main-nav');if(nav){nav.classList.toggle('open');el.setAttribute('aria-expanded',String(nav.classList.contains('open')));}return;} if(action==='close'){close();return;} if(action==='product'){detail(el.dataset.id);return;} if(action==='size'){selectedSize=el.dataset.size;renderDetail();return;} if(action==='add'){if(await add()){toast('Đã thêm sản phẩm vào giỏ hàng.');cart();}return;} if(action==='buy'){if(await add())await checkout();return;}
     if(action==='policy'){e.preventDefault();showPolicies(el.dataset.policy);return;}
-    if(action==='open-cart'){cart();return;}if(action==='open-account'){account();return;}if(action==='open-admin'){try{await refreshDatabase();admin();}catch(err){toast(err.message);}return;}if(action==='open-orders'){try{await refreshDatabase();state.user?orders():account();}catch(err){toast(err.message);}return;}
+    if(action==='open-cart'){cart();return;}if(action==='open-account'){account();return;}if (action === 'open-admin') {
+  window.location.href = 'admin.html';
+  return;
+}if(action==='open-orders'){try{await refreshDatabase();state.user?orders():account();}catch(err){toast(err.message);}return;}
     if(action==='open-search'){
       modal('Tìm kiếm', `<div class="vp-body">
         <form class="vp-form" data-form="search">
