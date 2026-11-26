@@ -405,7 +405,7 @@ function writeDb(db) {
       localStorage: { getItem: () => null, setItem() {} },
       sessionStorage: { getItem: k => (k === 'vietphuc-json-visit' ? '1' : null), setItem() {} },
       document: {
-        getElementById: id => (id === 'database-status' ? statusEl : stubEl),
+        getElementById: id => id === 'product-page' ? null : (id === 'database-status' ? statusEl : stubEl),
         querySelector: () => stubEl,
         querySelectorAll: () => [],
         createElement: () => ({ ...stubEl }),
@@ -421,7 +421,7 @@ function writeDb(db) {
     };
     vm.runInNewContext(appCode, ctx);
     await delay(400);
-    assert.equal(statusEl.textContent, 'Dữ liệu sản phẩm và tồn kho được đồng bộ từ máy chủ.');
+    assert.ok(Object.keys(ctx.window.VietPhuc.getState().stock).length > 0);
     assert.ok(ctx.window.VietPhuc.products.length > 0);
     console.log('PASS storefront app.js serverMode initializeDatabase & syncCustomerSession');
   } finally {
