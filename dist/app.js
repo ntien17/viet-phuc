@@ -114,14 +114,14 @@
   }
   async function initializeDatabase(){
     if(!serverMode)return;
-    status('Đang kết nối dữ liệu cửa hàng…');
-    try{const result=await readDatabase();applyPublicBootstrap(result);await syncCustomerSession();dbReady=true;status('Dữ liệu sản phẩm và tồn kho được đồng bộ từ máy chủ.');renderProducts();if(!sessionStorage.getItem('vietphuc-json-visit')){await trackPublic('visit');sessionStorage.setItem('vietphuc-json-visit','1');}}
+
+    try{const result=await readDatabase();applyPublicBootstrap(result);await syncCustomerSession();dbReady=true;;if(!sessionStorage.getItem('vietphuc-json-visit')){await trackPublic('visit');sessionStorage.setItem('vietphuc-json-visit','1');}}
     catch(error){dbReady=false;status('Không kết nối được máy chủ. Hãy chạy npm start rồi tải lại trang.',true);}
   }
   async function refreshDatabase(){
     if(!serverMode)return;
     if(dbBusy)throw new Error('Đang tải dữ liệu, vui lòng chờ.');
-    try{const latest=await readDatabase();applyPublicBootstrap(latest);dbReady=true;status('Dữ liệu sản phẩm và tồn kho được đồng bộ từ máy chủ.');renderProducts();}
+    try{const latest=await readDatabase();applyPublicBootstrap(latest);dbReady=true;}
     catch(error){dbReady=false;status('Không kết nối được máy chủ. Hãy kiểm tra và thử lại.',true);throw new Error('Không thể tải dữ liệu. Hãy kiểm tra máy chủ và thử lại.');}
   }
   async function commitShared(mutate){
@@ -189,9 +189,12 @@
     return `${cats.length?`<h3>Danh mục</h3><div class="vp-search-categories">${cats.map(name=>`<button type="button" data-action="search-category" data-name="${esc(name)}">${esc(name)}</button>`).join('')}</div>`:''}${results.length?`<h3>${query?'Sản phẩm phù hợp':'Sản phẩm gợi ý'}</h3>${results.map(p=>`<button type="button" class="vp-search-product" data-action="product" data-id="${esc(p.id)}"><img src="${esc(p.img)}" alt=""><span><b>${esc(p.name)}</b><small>${money(p.price)}</small></span></button>`).join('')}`:''}`;
   }
   function showSearchResults(query,selectedCategory='Tất cả'){
-    search=String(query||'').trim();category=selectedCategory;filters={sizes:[],colors:[],prices:[]};close();renderProducts();document.getElementById('product-grid')?.scrollIntoView({behavior:'smooth',block:'start'});
+    search=String(query||'').trim();category=selectedCategory;filters={sizes:[],colors:[],prices:[]};close();renderProducts();
+    if(productPage&&!productPage.hidden)location.hash='san-pham';
+    else document.getElementById('product-grid')?.scrollIntoView({behavior:'smooth',block:'start'});
   }
   function updateCount(){document.querySelectorAll('#cart-count,[data-cart-count]').forEach(x=>x.textContent=cartCount());}
+
   function renderProducts(){
     const grid=document.getElementById('product-grid'); if(!grid) return;
     const query=normalizeSearch(search);
@@ -281,6 +284,140 @@
     const colorButtons=cols.length>1?`<p><b>Màu sắc:</b> ${esc(selectedColor)}</p><div class="vp-size">${cols.map(c=>`<button class="${c===selectedColor?'active':''}" data-action="detail-color" data-color="${esc(c)}">${esc(c)}</button>`).join('')}</div>`:`<p><b>Màu sắc:</b> ${esc(selectedColor)}<br><b>Chất liệu:</b> ${esc(p.material)}</p>`;
     modal('Chi tiết sản phẩm',`<div class="vp-detail"><img src="${esc(p.img)}" alt="${esc(p.name)}"><div class="vp-detail-info"><div class="vp-muted">${esc(p.category)} / VIỆT PHỤC</div><h3>${esc(p.name)}</h3><div class="vp-detail-price">${money(price)} ${hasDisc?`<del style="font-size:15px;color:#999;font-weight:400;margin-left:6px">${money(p.old)}</del> <span class="vp-disc-tag">Giảm ${money(p.old-price)} (-${discPct}%)</span>`:''}</div><p>${esc(p.description||'Một thiết kế mang nét đẹp truyền thống vào những khoảnh khắc đáng nhớ.')}</p><div class="vp-line"></div>${colorButtons}${cols.length>1?`<p><b>Chất liệu:</b> ${esc(p.material)}</p>`:''}<p><b>Kích thước:</b> ${esc(selectedSize)}${v?.sku?` · <small class="vp-muted">SKU: ${esc(v.sku)}</small>`:''}</p><div class="vp-size">${szs.map(s=>`<button class="${s===selectedSize?'active':''}" data-action="size" data-size="${esc(s)}">${esc(s)}</button>`).join('')}</div><div class="vp-row" style="margin:12px 0"><span><b>Số lượng</b></span><div class="vp-qty"><button type="button" data-action="detail-qty" data-delta="-1">−</button><span style="padding:0 12px">${selectedQty}</span><button type="button" data-action="detail-qty" data-delta="1">+</button></div></div><p class="vp-muted">Còn ${stockAvail} sản phẩm ở phân loại này${inCart?` (trong giỏ: ${inCart} · có thể thêm: ${remaining})`:''}.${p.category==='Phụ kiện'?' Kích thước dùng chung.':' Bảng size tham khảo: S 40–47 kg · M 48–54 kg · L 55–61 kg · XL 62–68 kg.'}</p><button class="vp-btn vp-full" data-action="add" ${remaining<1?'disabled':''}>THÊM VÀO GIỎ HÀNG — ${money(price*selectedQty)}</button><button class="vp-btn secondary vp-full" data-action="buy" ${remaining<1?'disabled':''}>MUA NGAY</button><div class="vp-note">Giặt nhẹ bằng tay, tránh ngâm lâu và phơi dưới nắng gắt. Đổi size/mẫu trong <b>7 ngày</b> từ khi nhận hàng · Hỗ trợ lỗi may sẵn trong <b>30 ngày</b>.<div class="vp-policy-links"><button type="button" class="vp-link" data-action="policy" data-policy="returns">Chính sách đổi trả</button><button type="button" class="vp-link" data-action="policy" data-policy="warranty">Hỗ trợ chất lượng</button><button type="button" class="vp-link" data-action="policy" data-policy="size">Bảng size</button><button type="button" class="vp-link" data-action="policy" data-policy="pricing">Chính sách giá</button></div></div></div></div>`,true);
   }
+  const productPage = document.getElementById('product-page');
+  const homePage = document.getElementById('home');
+  const homeTitle = document.title;
+  let catalogLoaded = !serverMode;
+  let currentHash;
+
+  function navigateToProduct(id) {
+    const hash = '#/product/' + encodeURIComponent(id);
+    if (location.hash === hash) return;
+    if (homePage && !homePage.hidden) {
+      history.replaceState({...history.state, catalogScroll: window.scrollY}, '');
+    }
+    history.pushState(null, '', hash);
+    router();
+  }
+
+  function renderHomePage() {
+    const returning = !productPage.hidden;
+    productPage.hidden = true;
+    productPage.replaceChildren();
+    homePage.hidden = false;
+    selectedProduct = null;
+    document.title = homeTitle;
+    if (!returning) return;
+    const anchor = document.getElementById(location.hash.slice(1));
+    if (Number.isFinite(history.state?.catalogScroll)) {
+      window.scrollTo({top: history.state.catalogScroll, behavior: 'instant'});
+    } else if (anchor) {
+      anchor.scrollIntoView();
+    } else {
+      window.scrollTo({top: 0, behavior: 'instant'});
+    }
+  }
+
+  function renderProductSummary() {
+    const p = find(selectedProduct);
+    const sizes = sizesFor(p, selectedColor);
+    if (!sizes.includes(selectedSize)) selectedSize = sizes[0];
+    const variant = variantFor(p.id, selectedSize, selectedColor);
+    const stock = available(p.id, selectedSize, selectedColor);
+    const inCart = quantityInCart(p.id, selectedSize, selectedColor);
+    const remaining = Math.max(0, stock - inCart);
+    const price = unitPriceFor(p, variant);
+    selectedQty = Math.min(selectedQty, Math.max(1, remaining));
+    const summary = productPage.querySelector('.product-summary');
+    const focused = summary.contains(document.activeElement) ? document.activeElement : null;
+    function choices(values, field, active, action) {
+      return values.map(value => `<button type="button" data-action="${action}" data-${field}="${esc(value)}"
+        aria-pressed="${value === active}">${esc(value)}</button>`).join('');
+    }
+    summary.innerHTML = `<p class="product-category">${esc(p.category)}</p>
+      <h1>${esc(p.name)}</h1>
+      <p class="product-price">${money(price)} ${p.old > price ? `<del>${money(p.old)}</del>` : ''}</p>
+      <fieldset><legend>Màu sắc</legend>${choices(colorsFor(p), 'color', selectedColor, 'detail-color')}</fieldset>
+      <fieldset><legend>Kích thước</legend>${choices(sizes, 'size', selectedSize, 'size')}</fieldset>
+      <p class="product-stock">Còn ${stock} sản phẩm${inCart ? ` (trong giỏ: ${inCart} · có thể thêm: ${remaining})` : ''}${variant?.sku ? ' · SKU ' + esc(variant.sku) : ''}</p>
+      <div class="product-quantity"><strong>Số lượng</strong>
+        <button data-action="detail-qty" data-delta="-1" aria-label="Giảm số lượng" ${selectedQty <= 1 ? 'disabled' : ''}>−</button>
+        <output>${selectedQty}</output>
+        <button data-action="detail-qty" data-delta="1" aria-label="Tăng số lượng" ${selectedQty >= remaining ? 'disabled' : ''}>+</button>
+      </div>
+      <div class="product-actions mobile-action-bar">
+        <button class="vp-btn secondary" data-action="add" ${remaining < 1 ? 'disabled' : ''}>THÊM VÀO GIỎ</button>
+        <button class="vp-btn" data-action="buy" ${remaining < 1 ? 'disabled' : ''}>MUA NGAY</button>
+      </div>`;
+    if (focused) Array.from(summary.querySelectorAll('button')).find(button =>
+      button.dataset.action === focused.dataset.action && button.textContent === focused.textContent
+    )?.focus({preventScroll: true});
+  }
+
+  function renderProductPage(id) {
+    homePage.hidden = true;
+    productPage.hidden = false;
+    const p = find(id);
+    if (!catalogLoaded || !p || p.active === false || (serverMode && !dbReady)) {
+      selectedProduct = null;
+      const message = !catalogLoaded ? 'Đang tải sản phẩm…' : serverMode && !dbReady
+        ? 'Chưa tải được sản phẩm.' : 'Sản phẩm không còn hiển thị.';
+      document.title = message + ' | Việt Phục';
+      productPage.innerHTML = `<h1>${message}</h1><a href="#san-pham">Về danh sách sản phẩm</a>`;
+      return;
+    }
+    selectedProduct = id;
+    selectedColor = colorsFor(p)[0] || '';
+    const sizes = sizesFor(p, selectedColor);
+    selectedSize = sizes.includes('M') ? 'M' : sizes[0];
+    selectedQty = 1;
+    document.title = p.name + ' | Việt Phục';
+    const photos = [...new Set([p.img, ...(Array.isArray(p.images) ? p.images : [])]
+      .filter(src => typeof src === 'string' && src))];
+    const description = esc(p.description || (p.name + ' thuộc bộ sưu tập ' + p.category + ' của Việt Phục.'));
+    const accordion = (title, content, open = false) => `<details ${open ? 'open' : ''}>
+      <summary>${title}</summary><div>${content}</div></details>`;
+    const policy = (title, key) => publicPolicies?.visibility?.[key] === false ? '' :
+      accordion(title, renderPolicyDocument(publicPolicies?.items?.[key] || POLICY_FALLBACK[key]));
+    const related = products.filter(item => item.id !== id && item.active !== false && item.category === p.category).slice(0, 4);
+    productPage.innerHTML = `<nav class="product-crumbs" aria-label="Đường dẫn">
+      <a href="#home">Trang chủ</a> / <a href="#san-pham">Sản phẩm</a> / <span aria-current="page">${esc(p.name)}</span></nav>
+      <div class="product-layout">
+        <div class="product-gallery">
+          <img class="product-main-image" src="${esc(photos[0])}" alt="${esc(p.name)}">
+          <div class="product-thumbnails">${photos.map((src,i) => `<button data-action="product-photo" aria-label="Xem ảnh ${i+1}" aria-pressed="${i === 0}">
+            <img src="${esc(src)}" alt=""></button>`).join('')}</div>
+        </div><section class="product-summary"></section>
+      </div>
+      <section class="product-accordion" aria-label="Thông tin sản phẩm">
+        ${accordion('Mô tả sản phẩm', description, true)}
+        ${accordion('Chất liệu', esc(p.material || 'Đang cập nhật'))}
+        ${policy('Hướng dẫn chọn size', 'size')}
+        ${policy('Chính sách giao hàng', 'shipping')}
+        ${policy('Chính sách đổi trả', 'returns')}
+        ${accordion('Hướng dẫn bảo quản', esc(p.care || 'Giặt nhẹ bằng tay, tránh ngâm lâu và phơi dưới nắng gắt.'))}
+      </section>
+      ${related.length ? `<section class="product-related"><h2>Sản phẩm liên quan</h2><div>
+        ${related.map(item => `<a href="#/product/${encodeURIComponent(item.id)}" data-action="product" data-id="${esc(item.id)}">
+          <img src="${esc(item.img)}" alt="" loading="lazy"><strong>${esc(item.name)}</strong><span>${money(item.price)}</span></a>`).join('')}
+      </div></section>` : ''}`;
+    renderProductSummary();
+  }
+
+  function router() {
+    if (!productPage || currentHash === location.hash) return;
+    currentHash = location.hash;
+    const match = /^#\/product\/([^/]+)$/.exec(currentHash);
+    if (!match && productPage.hidden) return;
+    if (document.querySelector('.vp-overlay')) close();
+    if (document.querySelector('.vp-policy-overlay')) closePolicyDrawer();
+    if (!match) { renderHomePage(); return; }
+    let id;
+    try { id = decodeURIComponent(match[1]); } catch { id = ''; }
+    renderProductPage(id);
+    window.scrollTo({top: 0, behavior: 'instant'});
+  }
+
   async function add(){
     try{
       const productId=selectedProduct,size=selectedSize,color=selectedColor,qty=Math.max(1,Number(selectedQty)||1);
@@ -432,7 +569,7 @@
   function pwField(name,placeholder,minlen){return `<div class="vp-pw-wrap"><input name="${name}" type="password" required${minlen?` minlength="${minlen}"`:''} placeholder="${esc(placeholder||'')}"><button type="button" class="vp-pw-toggle" data-action="toggle-pw">Hiện</button></div>`;}
   function customerOrderCard(o){
     const items=(o.items||[]).map(i=>`${esc(i.name||i.productName||'Sản phẩm')} (${esc(i.size||'')}) × ${i.qty||1}`).join('<br>');
-    return `<div class="vp-order"><div class="vp-row"><h3>${esc(o.id)}</h3><span class="vp-status">${esc(fmtOrderStatus(o.orderStatus||o.status))}</span></div><p>${esc(fmtDateVi(o.createdAt||o.date))} · <b>${money(o.total||0)}</b></p>${items?`<p>${items}</p>`:''}<p>Thanh toán: ${esc(fmtPaymentStatus(o.paymentStatus))}</p><div class="vp-inline-actions"><button type="button" class="vp-link" data-action="customer-order-detail" data-id="${esc(o.id)}">Xem chi tiết →</button></div></div>`;
+    return `<div class="vp-order"><div class="vp-row"><h3>${esc(o.id)}</h3><span class="vp-status">${esc(fmtOrderStatus(o.orderStatus||o.status))}</span></div><p>${esc(fmtDateVi(o.createdAt||o.date))} · <b>${money(o.total||0)}</b></p>${items?`<p>${items}</p>`:''}<p>Thanh toán: ${esc(fmtPaymentStatus(o.paymentStatus))}</p><div class="vp-inline-actions"><button type="button" class="vp-link" data-action="customer-order-detail" data-id="${esc(o.id)}">Xem chi tiết đơn hàng →</button></div></div>`;
   }
   async function loadCustomerOrders(){
     const box=document.getElementById('vp-customer-orders');
@@ -447,6 +584,44 @@
       box.innerHTML=`<div class="vp-error">${esc(err.message)}</div>`;
     }
   }
+  function demoQr(order) {
+    return `<section class="demo-qr" aria-label="Đối chiếu thanh toán QR">
+      <img src="assets/demo-payment.svg" width="154" height="154" alt="QR chứa thông tin tài khoản thử nghiệm Việt Phục">
+      <div><h3>Đối chiếu thanh toán QR</h3>
+        <p>Ngân hàng: VIET PHUC DEMO<br>Chủ tài khoản: VIET PHUC DEMO<br>Số tài khoản: <b>VP-DEMO-0001</b></p>
+        <p>Số tiền: <b>${money(order.total)}</b><br>Nội dung chuyển khoản: <b>${esc(order.id)}</b></p>
+        <small>QR chỉ chứa thông tin mẫu. Vui lòng không chuyển tiền thật.</small>
+      </div></section>`;
+  }
+
+  function cancellationForm(id) {
+    return `<details class="order-change"><summary>Hủy đơn hàng</summary>
+      <form class="vp-form" data-form="cancel-order" data-id="${esc(id)}">
+        <label>Lý do hủy đơn<textarea name="reason" rows="3" maxlength="300" required></textarea></label>
+        <button class="vp-btn" type="submit">Xác nhận hủy đơn</button>
+      </form></details>`;
+  }
+
+  function editableOrderDetails(order) {
+    if (order.orderStatus !== 'confirmed' || order.inventoryStatus !== 'reserved' || order.shipment?.shipStatus !== 'pending') return '';
+    const fields = order.items.map(item => {
+      const product = find(item.productId);
+      const variants = (product?.variants || []).filter(v => product.active && v.active && v.sku !== item.sku);
+      return `<label>${esc(item.name)} × ${item.qty}
+        <select name="sku"><option value="${esc(item.sku)}">${esc(item.color)} / ${esc(item.size)} (đã chọn)</option>
+          ${variants.map(v => {
+            const samePrice = (v.priceOverride ?? product.price) === item.unitPrice;
+            return `<option value="${esc(v.sku)}" ${samePrice ? '' : 'disabled'}>${esc(v.color)} / ${esc(v.size)}${samePrice ? '' : ' (khác giá)'}</option>`;
+          }).join('')}</select></label>`;
+    }).join('');
+    return `<details class="order-change"><summary>Thay đổi địa chỉ, màu sắc hoặc kích thước</summary>
+      <form class="vp-form" data-form="edit-order-details" data-id="${esc(order.id)}" data-version="${order.history.length}">
+        <label>Địa chỉ nhận hàng đầy đủ<textarea name="address" rows="2" minlength="5" maxlength="600" required>${esc(order.address)}</textarea></label>
+        ${fields}<p class="vp-muted">Chọn phân loại cùng giá. Cửa hàng kiểm tra tồn kho khi lưu.</p>
+        <button class="vp-btn" type="submit">Lưu thay đổi</button>
+      </form></details>`;
+  }
+
   async function loadCustomerOrderDetail(orderId){
     const box=document.getElementById('vp-customer-orders');
     if(!box)return;
@@ -480,7 +655,7 @@
       const returnsHtml=orderReturns.length
         ? `<div class="vp-line"></div><p><b>Yêu cầu đổi trả / hỗ trợ chất lượng (${orderReturns.length}):</b></p>${orderReturns.map(r=>`<div class="vp-promo-box"><b>${esc(r.id)}</b> · ${esc(r.type)} · <span class="vp-status">${esc(r.status)}</span><br>Lý do: ${esc(r.reason)}${r.shippingFeeBearer?`<br>Phí VC đổi trả: ${r.shippingFeeBearer==='store'?'Cửa hàng chịu (lỗi SP/giao sai)':'Khách hàng chịu (đổi theo nhu cầu)'}`:''}${r.adminNote?`<br>Phản hồi: ${esc(r.adminNote)}`:''}</div>`).join('')}`
         : '';
-      box.innerHTML=`<button type="button" class="vp-link" data-action="customer-tab" data-tab="orders">← Quay lại danh sách đơn hàng</button><div class="vp-order-detail"><div class="vp-row"><h3>Đơn ${esc(o.id)}</h3><span class="vp-status">${esc(fmtOrderStatus(o.orderStatus||o.status))}</span></div><p><b>Ngày đặt:</b> ${esc(fmtDateVi(o.createdAt||o.date))}</p><p><b>Trạng thái đơn hàng:</b> ${esc(fmtOrderStatus(o.orderStatus))} · <b>Thanh toán:</b> ${esc(fmtPaymentStatus(o.paymentStatus))} · <b>Vận chuyển:</b> ${esc(fmtShipStatus(o.shipment?.shipStatus||'pending'))}</p><p><b>Phương thức:</b> ${esc(payMethodLabel)}</p><p><b>Giao nhận:</b> ${esc(addr)}</p>${o.note?`<p><b>Ghi chú:</b> ${esc(o.note)}</p>`:''}${snapHtml}<div class="vp-line"></div>${items}<div class="vp-line"></div>${o.subtotal!==undefined?`<div class="vp-row"><span>Tiền hàng</span><span>${money(o.subtotal)}</span></div>`:''}${o.discountAmount?`<div class="vp-row"><span>Giảm giá${o.discountCode?` (${esc(o.discountCode)})`:''}</span><span>−${money(o.discountAmount)}</span></div>`:''}${o.shippingFee!==undefined?`<div class="vp-row"><span>Phí vận chuyển</span><span>${money(o.shippingFee)}</span></div>`:''}<div class="vp-row"><strong>Tổng thanh toán</strong><strong>${money(o.total||0)}</strong></div>${windowHint?`<p class="vp-muted" style="margin-top:8px">${esc(windowHint)}</p>`:''}<div class="vp-inline-actions">${canPaySim?`<button type="button" class="vp-btn" data-action="customer-pay-sim" data-id="${esc(o.id)}" data-sim="success">MÔ PHỎNG THANH TOÁN THÀNH CÔNG</button><button type="button" class="vp-btn secondary" data-action="customer-pay-sim" data-id="${esc(o.id)}" data-sim="fail">MÔ PHỎNG THẤT BẠI</button>`:''}${canCancel?`<button type="button" class="vp-link" data-action="customer-cancel-order" data-id="${esc(o.id)}">Hủy đơn hàng</button>`:''}${canReturn?`<button type="button" class="vp-btn secondary" data-action="open-return-form" data-id="${esc(o.id)}">YÊU CẦU ĐỔI TRẢ / HỖ TRỢ CHẤT LƯỢNG</button>`:''}</div>${returnsHtml}<div id="vp-return-form-wrap"></div></div>`;
+      box.innerHTML=`<button type="button" class="vp-link" data-action="customer-tab" data-tab="orders">← Quay lại danh sách đơn hàng</button><div class="vp-order-detail"><div class="vp-row"><h3>Đơn ${esc(o.id)}</h3><span class="vp-status">${esc(fmtOrderStatus(o.orderStatus||o.status))}</span></div><p><b>Ngày đặt:</b> ${esc(fmtDateVi(o.createdAt||o.date))}</p><p><b>Trạng thái đơn hàng:</b> ${esc(fmtOrderStatus(o.orderStatus))} · <b>Thanh toán:</b> ${esc(fmtPaymentStatus(o.paymentStatus))} · <b>Vận chuyển:</b> ${esc(fmtShipStatus(o.shipment?.shipStatus||'pending'))}</p><p><b>Phương thức:</b> ${esc(payMethodLabel)}</p><p><b>Giao nhận:</b> ${esc(addr)}</p>${o.note?`<p><b>Ghi chú:</b> ${esc(o.note)}</p>`:''}${o.orderStatus==='cancelled' && o.history?.length ? `<p><b>Lý do hủy:</b> ${esc(o.history.filter(h=>h.status==='cancelled').at(-1)?.note || '—')}</p>` : ''}${snapHtml}<div class="vp-line"></div>${items}<div class="vp-line"></div>${o.subtotal!==undefined?`<div class="vp-row"><span>Tiền hàng</span><span>${money(o.subtotal)}</span></div>`:''}${o.discountAmount?`<div class="vp-row"><span>Giảm giá${o.discountCode?` (${esc(o.discountCode)})`:''}</span><span>−${money(o.discountAmount)}</span></div>`:''}${o.shippingFee!==undefined?`<div class="vp-row"><span>Phí vận chuyển</span><span>${money(o.shippingFee)}</span></div>`:''}<div class="vp-row"><strong>Tổng thanh toán</strong><strong>${money(o.total||0)}</strong></div>${windowHint?`<p class="vp-muted" style="margin-top:8px">${esc(windowHint)}</p>`:''}${canPaySim ? demoQr(o) : ''}${editableOrderDetails(o)}${canCancel ? cancellationForm(o.id) : ''}<div class="vp-inline-actions">${canPaySim?`<button type="button" class="vp-btn" data-action="customer-pay-sim" data-id="${esc(o.id)}" data-sim="success">MÔ PHỎNG THANH TOÁN THÀNH CÔNG</button><button type="button" class="vp-btn secondary" data-action="customer-pay-sim" data-id="${esc(o.id)}" data-sim="fail">MÔ PHỎNG THẤT BẠI</button>`:''}${canReturn?`<button type="button" class="vp-btn secondary" data-action="open-return-form" data-id="${esc(o.id)}">YÊU CẦU ĐỔI TRẢ / HỖ TRỢ CHẤT LƯỢNG</button>`:''}</div>${returnsHtml}<div id="vp-return-form-wrap"></div></div>`;
     }catch(err){
       if(err.status===401||err.code==='account_locked'){toast(err.message);account('login',err.message);return;}
       box.innerHTML=`<div class="vp-error">${esc(err.message)}</div><button type="button" class="vp-link" data-action="customer-tab" data-tab="orders">← Quay lại danh sách</button>`;
@@ -608,7 +783,7 @@
       ${o.discountAmount?`<div class="vp-row"><span>Khuyến mãi (${esc(o.discountCode||'')})</span><span>−${money(o.discountAmount)}</span></div>`:''}
       <div class="vp-row"><span>Phí vận chuyển</span><span>${money(o.shippingFee)}</span></div>
       <div class="vp-row"><strong>Tổng thanh toán</strong><strong>${money(o.total)}</strong></div>
-      ${isPendingOnline?`<div class="vp-note">Đơn thanh toán trực tuyến mô phỏng đang giữ hàng 15 phút. Chọn kết quả mô phỏng bên dưới:</div><button type="button" class="vp-btn vp-full" data-action="customer-pay-sim" data-id="${esc(o.id)}" data-sim="success" data-confirm="1">MÔ PHỎNG THANH TOÁN THÀNH CÔNG</button><button type="button" class="vp-btn secondary vp-full" data-action="customer-pay-sim" data-id="${esc(o.id)}" data-sim="fail" data-confirm="1">MÔ PHỎNG THANH TOÁN THẤT BẠI</button>`:''}
+      ${isPendingOnline?`${demoQr(o)}<div class="vp-note">Đơn thanh toán trực tuyến mô phỏng đang giữ hàng 15 phút. Chọn kết quả mô phỏng bên dưới:</div><button type="button" class="vp-btn vp-full" data-action="customer-pay-sim" data-id="${esc(o.id)}" data-sim="success" data-confirm="1">MÔ PHỎNG THANH TOÁN THÀNH CÔNG</button><button type="button" class="vp-btn secondary vp-full" data-action="customer-pay-sim" data-id="${esc(o.id)}" data-sim="fail" data-confirm="1">MÔ PHỎNG THANH TOÁN THẤT BẠI</button>`:''}
       <button type="button" class="vp-btn secondary vp-full" data-action="open-orders">XEM LỊCH SỬ ĐƠN HÀNG</button>
     </div>`);
   }
@@ -633,8 +808,8 @@
           <select name="shippingType"><option value="standard">Giao hàng tiêu chuẩn (mô phỏng) · ${money(std)}</option><option value="remote">Giao hàng khu vực xa / hải đảo (mô phỏng) · ${money(rem)}</option></select>
           <p class="vp-muted">Thời gian giao dự kiến: Nội thành Đắk Lắk 1–2 ngày; khác trong tỉnh 2–3 ngày; tỉnh/TP lớn 2–4 ngày; vùng sâu/xa/hải đảo 4–7 ngày hoặc lâu hơn (chỉ mang tính dự kiến).</p>
           <label>Phương thức thanh toán</label>
-          <select name="paymentMethod"><option value="COD">Thanh toán khi nhận hàng(COD)</option><option value="online">Thanh toán trực tuyến</option></select>
-          <p class="vp-muted">Lưu ý: Chuyển khoản QR ngân hàng là định hướng mở rộng trong báo cáo, chưa triển khai giao dịch thật.</p>
+          <select name="paymentMethod"><option value="COD">Thanh toán khi nhận hàng(COD)</option><option value="online">Thanh toán bằng QR (demo)</option></select>
+          <p class="vp-muted">Khi chọn QR, mã và thông tin tài khoản demo sẽ hiển thị sau khi xác nhận đặt hàng.</p>
           <label>Mã khuyến mãi (tối đa 1 mã)</label>
           <div class="vp-row"><input id="vp-promo-input" placeholder="Nhập mã giảm giá" style="flex:1"><button type="button" class="vp-btn secondary" data-action="apply-promo" style="padding:13px 14px">Áp dụng</button><button type="button" class="vp-link" data-action="remove-promo">Xóa</button></div>
           <div id="vp-promo-msg" style="margin-top:8px"></div>
@@ -655,24 +830,239 @@
       refreshCheckoutPreview();
       return;
     }
-    if(!state.user){toast('Vui lòng tạo tài khoản dùng thử trước khi đặt hàng.');account();return;}modal('Thông tin đặt hàng',`<div class="vp-body"><div class="vp-note">ĐƠN HÀNG THỬ NGHIỆM · Không có giao dịch hay vận chuyển thực tế. Vui lòng không nhập thông tin thật.</div><form class="vp-form" data-form="checkout"><label>Người nhận</label><input name="receiver" required value="${esc(state.user.name)}"><label>Số điện thoại dùng thử</label><input name="phone" required placeholder="Ví dụ: 0900000000"><label>Địa chỉ nhận hàng dùng thử</label><input name="address" required placeholder="Số nhà, đường, phường/xã, tỉnh/thành"><label>Vận chuyển</label><select name="shipping"><option value="30000">Giao hàng tiêu chuẩn · 30.000₫</option><option value="45000">Giao hàng nhanh · 45.000₫</option></select><label>Phương thức thanh toán</label><select name="payment"><option value="COD">Thanh toán khi nhận hàng (COD mô phỏng)</option><option value="online">Thanh toán trực tuyến mô phỏng</option></select><div class="vp-line"></div><div class="vp-row"><span>Tiền hàng</span><b>${money(subtotal())}</b></div><div class="vp-row"><span>Phí giao hàng</span><b data-checkout-shipping>${money(30000)}</b></div><div class="vp-row"><strong>Tổng thanh toán</strong><strong data-checkout-total>${money(subtotal()+30000)}</strong></div><label><input type="checkbox" required style="width:auto"> Tôi đồng ý với điều kiện mua hàng và chính sách đổi trả thử nghiệm.</label><button class="vp-btn vp-full">XÁC NHẬN ĐẶT HÀNG</button></form></div>`);
+    if(!state.user){toast('Vui lòng tạo tài khoản dùng thử trước khi đặt hàng.');account();return;}modal('Thông tin đặt hàng',`<div class="vp-body"><div class="vp-note">ĐƠN HÀNG THỬ NGHIỆM · Không có giao dịch hay vận chuyển thực tế. Vui lòng không nhập thông tin thật.</div><form class="vp-form" data-form="checkout"><label>Người nhận</label><input name="receiver" required value="${esc(state.user.name)}"><label>Số điện thoại dùng thử</label><input name="phone" required placeholder="Ví dụ: 0900000000"><label>Địa chỉ nhận hàng dùng thử</label><input name="address" required placeholder="Số nhà, đường, phường/xã, tỉnh/thành"><label>Vận chuyển</label><select name="shipping"><option value="30000">Giao hàng tiêu chuẩn · 30.000₫</option><option value="45000">Giao hàng nhanh · 45.000₫</option></select><label>Phương thức thanh toán</label><select name="payment"><option value="COD">Thanh toán khi nhận hàng (COD mô phỏng)</option><option value="online">Thanh toán bằng QR (demo)</option></select><div class="vp-line"></div><div class="vp-row"><span>Tiền hàng</span><b>${money(subtotal())}</b></div><div class="vp-row"><span>Phí giao hàng</span><b data-checkout-shipping>${money(30000)}</b></div><div class="vp-row"><strong>Tổng thanh toán</strong><strong data-checkout-total>${money(subtotal()+30000)}</strong></div><label><input type="checkbox" required style="width:auto"> Tôi đồng ý với điều kiện mua hàng và chính sách đổi trả thử nghiệm.</label><button class="vp-btn vp-full">XÁC NHẬN ĐẶT HÀNG</button></form></div>`);
   }
   function orders(){let list=state.orders.filter(o=>o.email===state.user?.email);modal('Đơn hàng của tôi',`<div class="vp-body"><p class="vp-muted">${serverMode?'Đơn thử nghiệm được lưu trong file JSON trên máy.':'Thông tin chỉ được lưu trên trình duyệt này.'}</p>${list.length?list.slice().reverse().map(o=>orderCard(o,false)).join(''):'<p class="vp-empty">Bạn chưa có đơn hàng nào.</p>'}</div>`);}
-  function orderCard(o,admin){return `<div class="vp-order"><div class="vp-row"><h3>${esc(o.id)}</h3><span class="vp-status">${esc(o.status)}</span></div><p>${esc(o.date)} · ${money(o.total)}</p><p>${o.items.map(i=>`${esc(i.name)} (${i.size}) × ${i.qty}`).join('<br>')}</p><p>Thanh toán: ${esc(o.paymentStatus)} · Vận chuyển: ${esc(o.shipStatus)}</p>${o.returnStatus?`<p>Đổi trả: ${esc(o.returnStatus)}</p>`:''}<div class="vp-inline-actions">${!admin&&o.inventory==='reserved'&&o.status!=='Đã hủy'?`<button class="vp-link" data-action="cancel" data-id="${o.id}">Hủy đơn</button>`:''}${!admin&&o.payment==='online'&&o.paymentStatus==='Thanh toán thất bại'?`<button class="vp-link" data-action="retry" data-id="${o.id}">Thanh toán lại</button>`:''}${!admin&&o.status==='Đã giao'&&!o.returnStatus?`<button class="vp-link" data-action="return" data-id="${o.id}">Yêu cầu đổi trả</button>`:''}${admin?`<button class="vp-link" data-action="admin-order" data-id="${o.id}">Xử lý đơn →</button>`:''}</div></div>`;}
-  function payment(o){modal('Thanh toán mô phỏng',`<div class="vp-body"><div class="vp-note">GIAO DỊCH THỬ NGHIỆM · Không thu tiền thật và không kết nối cổng thanh toán.</div><p>Mã đơn: <b>${esc(o.id)}</b><br>Tổng thanh toán: <b>${money(o.total)}</b></p><p>Chọn kết quả để kiểm thử luồng thanh toán:</p><button class="vp-btn vp-full" data-action="pay-result" data-id="${o.id}" data-result="ok">MÔ PHỎNG THÀNH CÔNG</button><button class="vp-btn secondary vp-full" data-action="pay-result" data-id="${o.id}" data-result="fail">MÔ PHỎNG THẤT BẠI</button></div>`);}
+  function orderCard(o,admin,detail=false){return `<div class="vp-order"><div class="vp-row"><h3>${esc(o.id)}</h3><span class="vp-status">${esc(o.status)}</span></div><p>${esc(o.date)} · ${money(o.total)}</p><p>${o.items.map(i=>`${esc(i.name)} (${i.size}) × ${i.qty}`).join('<br>')}</p><p>Thanh toán: ${esc(o.paymentStatus)} · Vận chuyển: ${esc(o.shipStatus)}</p>${o.cancellation?`<p>Yêu cầu hủy: ${esc(o.cancellation.status)}</p>`:''}${o.supportMessages?.length?`<p>Hỗ trợ: ${o.supportMessages.at(-1).role==='admin'?'Đã phản hồi':'Chờ phản hồi'}</p>`:''}${o.returnStatus?`<p>Đổi trả: ${esc(o.returnStatus)}</p>`:''}<p>Địa chỉ: ${esc(o.address)}</p><p>Phương thức: ${o.payment==='online'?'Trực tuyến (mô phỏng)':'COD (mô phỏng)'}</p><div class="vp-inline-actions">${!admin&&!detail?`<button class="vp-link" data-action="order-detail" data-id="${esc(o.id)}">Xem chi tiết</button>`:''}${!admin&&detail&&o.status==='Chờ xác nhận'&&o.inventory==='reserved'&&!cancellationPending(o)&&o.paymentStatus!=='Thanh toán thành công'?`<button class="vp-link" data-action="edit-order" data-id="${esc(o.id)}">Sửa đơn hàng</button>`:''}${!admin&&detail&&canRequestCancellation(o)?`<button class="vp-link" data-action="cancel" data-id="${o.id}">Yêu cầu hủy đơn</button>`:''}${!admin&&detail&&canPayOnline(o)?`<button class="vp-link" data-action="retry" data-id="${o.id}">${o.paymentStatus==='Thanh toán thất bại'?'Thanh toán lại':'Tiếp tục thanh toán'}</button>`:''}${!admin&&detail&&canRequestReturn(o)?`<button class="vp-link" data-action="return" data-id="${o.id}">Yêu cầu đổi trả</button>`:''}${admin&&!detail?`<button class="vp-link" data-action="admin-order" data-id="${o.id}">Xử lý đơn →</button>`:''}</div></div>`;}
+  function orderDetail(id) {
+    const order = state.orders.find(item => item.id === id && item.email === state.user?.email);
+    if (!order) { toast('Không tìm thấy đơn hàng.'); return; }
+    modal('Chi tiết đơn hàng', `<div class="vp-body">${orderCard(order,false,true)}
+      <section class="vp-order">
+        <h3>Thông tin giao hàng</h3>
+        <p>Người nhận: ${esc(order.receiver)} · ${esc(order.phone)}</p>
+        ${Number.isFinite(order.shippingFee) ? `<p>Tiền hàng: ${money(order.total - order.shippingFee)} · Phí giao hàng: ${money(order.shippingFee)}</p>` : ''}
+      </section>
+      ${order.returnStatus ? returnSummary(order) : order.status !== 'Đã hủy' ? `<p class="vp-note">${order.status !== 'Đã giao'
+        ? 'Bạn có thể gửi yêu cầu đổi trả sau khi nhận hàng.'
+        : canRequestReturn(order) ? 'Gửi yêu cầu đổi trả trong vòng 7 ngày kể từ khi nhận hàng.' : 'Đơn hàng đã hết thời hạn gửi yêu cầu đổi trả.'}</p>` : ''}
+      ${order.refund ? `<p>Hoàn tiền: ${esc(order.refund)}</p>` : ''}
+      ${order.cancellation ? cancellationSection(order, false) : ''}
+      ${supportSection(order, false)}
+      ${order.history?.length ? `<section class="vp-order"><h3>Lịch sử đơn hàng</h3>
+        <ol>${order.history.map(event => typeof event === 'string'
+          ? `<li>${esc(event)}</li>`
+          : `<li>${esc(event.label)} · <time datetime="${esc(event.at)}">${formatOrderTime(event.at)}</time></li>`).join('')}</ol>
+      </section>` : ''}
+      <button class="vp-btn secondary vp-full" data-action="orders">QUAY LẠI ĐƠN HÀNG</button></div>`);
+  }
+  function formatOrderTime(at) {
+    return new Date(at).toLocaleString('vi-VN', {timeZone:'Asia/Ho_Chi_Minh'});
+  }
+
+  function addOrderHistory(order, label) {
+    (order.history ||= []).push({label, at:new Date().toISOString()});
+  }
+
+  function cancellationPending(order) {
+    return order.cancellation?.status === 'Chờ xử lý';
+  }
+
+  function canRequestCancellation(order) {
+    return order.inventory === 'reserved' && ['Chờ xác nhận', 'Đã xác nhận'].includes(order.status)
+      && !cancellationPending(order);
+  }
+
+  function cancellationSection(order, isAdmin) {
+    const request = order.cancellation;
+    return `<section class="vp-order">
+      <h3>Yêu cầu hủy đơn</h3>
+      <p><strong>${esc(request.status)}</strong> · ${formatOrderTime(request.requestedAt)}</p>
+      <p>Lý do: ${esc(request.reason)}</p>
+      ${request.response ? `<p>Phản hồi: ${esc(request.response)}</p>` : ''}
+      ${isAdmin && cancellationPending(order) ? `<form class="vp-form" data-form="resolve-cancellation" data-id="${esc(order.id)}">
+        <label for="cancel-response">Phản hồi cho khách</label>
+        <textarea id="cancel-response" name="response" maxlength="500"></textarea>
+        <button class="vp-btn" type="submit" name="decision" value="approve">Duyệt hủy</button>
+        <button class="vp-btn secondary" type="submit" name="decision" value="reject">Từ chối</button>
+      </form>` : ''}
+    </section>`;
+  }
+
+  function supportSection(order, isAdmin) {
+    const messages = order.supportMessages || [];
+    if (isAdmin && !messages.length) return '';
+    return `<section class="vp-order">
+      <h3>Hỗ trợ đơn hàng</h3>
+      ${messages.map(message => `<div class="vp-order">
+        <strong>${message.role === 'admin' ? 'Việt Phục' : 'Khách hàng'}</strong> · <time datetime="${esc(message.at)}">${formatOrderTime(message.at)}</time>
+        ${message.topic ? `<p>${esc(message.topic)}</p>` : ''}
+        <p style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(message.body)}</p>
+      </div>`).join('')}
+      <form class="vp-form" data-form="${isAdmin ? 'support-reply' : 'support-request'}" data-id="${esc(order.id)}">
+        ${isAdmin ? '' : `<label for="support-topic">Vấn đề cần hỗ trợ</label>
+          <select id="support-topic" name="topic" required>
+            <option value="Giao hàng chậm">Giao hàng chậm</option>
+            <option value="Vấn đề thanh toán">Vấn đề thanh toán</option>
+            <option value="Vấn đề khác">Vấn đề khác</option>
+          </select>`}
+        <label for="support-body">${isAdmin ? 'Nội dung phản hồi' : 'Mô tả vấn đề'}</label>
+        <textarea id="support-body" name="body" required maxlength="1000"></textarea>
+        <button class="vp-btn" type="submit">${isAdmin ? 'Gửi phản hồi' : 'Gửi yêu cầu hỗ trợ'}</button>
+      </form>
+    </section>`;
+  }
+
+  function canPayOnline(order) {
+    return order.payment === 'online' && order.inventory === 'reserved' && !cancellationPending(order) &&
+      ['Chưa thanh toán', 'Thanh toán thất bại'].includes(order.paymentStatus);
+  }
+
+  function canRequestReturn(order) {
+    if (order.status !== 'Đã giao' || order.returnStatus) return false;
+    const deliveredAt = Date.parse(order.deliveredAt);
+    return !Number.isFinite(deliveredAt) || Date.now() - deliveredAt <= 7 * 24 * 60 * 60 * 1000;
+  }
+
+  function returnSummary(order) {
+    const exchange = order.returnExchange;
+    return `<section class="vp-order">
+      <h3>${exchange ? 'Yêu cầu đổi size' : 'Yêu cầu trả hàng'}</h3>
+      <p>Trạng thái: ${esc(order.returnStatus)}</p>
+      ${exchange ? `<p>${esc(exchange.name)} · ${esc(exchange.oldSize)} → ${esc(exchange.newSize)} · Số lượng: ${exchange.qty}</p>` : ''}
+      <p>Lý do: ${esc(order.returnReason)}</p>
+    </section>`;
+  }
+
+  function returnForm(order) {
+    const variants = order.items.flatMap((item, index) => {
+      const product = find(item.id);
+      return product ? sizesFor(product).filter(size => size !== item.size).map(size =>
+        `<option value="${index}:${esc(size)}">${esc(item.name)} · ${esc(item.color)} · ${esc(item.size)} → ${esc(size)} · SL ${item.qty}</option>`) : [];
+    });
+    modal('Yêu cầu đổi trả', `<div class="vp-body">
+      <p>Đơn hàng <strong>${esc(order.id)}</strong></p>
+      <form class="vp-form" data-form="return" data-id="${esc(order.id)}">
+        <label for="return-choice">Bạn muốn đổi hay trả hàng?</label>
+        <select id="return-choice" name="choice" required>
+          <option value="">Chọn phương án</option>
+          <option value="return">Trả toàn bộ đơn hàng</option>
+          ${variants.length ? `<optgroup label="Đổi size">${variants.join('')}</optgroup>` : ''}
+        </select>
+        <label for="return-reason">Lý do</label>
+        <textarea id="return-reason" name="reason" required maxlength="500"></textarea>
+        <button class="vp-btn vp-full">GỬI YÊU CẦU</button>
+        <button type="button" class="vp-btn secondary vp-full" data-action="order-detail" data-id="${esc(order.id)}">VỀ CHI TIẾT ĐƠN</button>
+      </form></div>`);
+  }
+
+  // Tạo dấu nhận diện để phát hiện đơn thay đổi trong lúc mở biểu mẫu.
+  function orderEditSnapshot(order) {
+    return JSON.stringify({
+      address: order.address,
+      payment: order.payment,
+      paymentStatus: order.paymentStatus,
+      items: order.items.map(item => ({id: item.id, size: item.size, qty: item.qty}))
+    });
+  }
+
+  function editOrder(id) {
+    const order = state.orders.find(item => item.id === id);
+    if (!order || order.email !== state.user?.email || order.status !== 'Chờ xác nhận' ||
+        order.inventory !== 'reserved' || cancellationPending(order) || order.paymentStatus === 'Thanh toán thành công') {
+      toast('Đơn hàng không còn đủ điều kiện chỉnh sửa.');
+      return;
+    }
+    const fields = order.items.map((item, index) => {
+      const product = find(item.id);
+      const sizes = product ? [...new Set([...sizesFor(product), item.size])] : [item.size];
+      return `<div class="vp-order"><strong>${esc(item.name)}</strong>
+        <p>${esc(item.color)} · Số lượng: ${item.qty}</p>
+        <label for="edit-size-${index}">Kích thước</label>
+        <select id="edit-size-${index}" name="size_${index}" required>
+          ${sizes.map(size => `<option value="${esc(size)}" ${size === item.size ? 'selected' : ''}>${esc(size)}</option>`).join('')}
+        </select></div>`;
+    }).join('');
+    modal('Sửa đơn hàng', `<div class="vp-body">
+      <div class="vp-note">Chỉnh sửa khi đơn đang chờ xác nhận và chưa thanh toán thành công.</div>
+      <form class="vp-form" data-form="edit-order" data-id="${esc(order.id)}">
+        <input type="hidden" name="snapshot" value="${esc(orderEditSnapshot(order))}">
+        <label for="edit-address">Địa chỉ nhận hàng</label>
+        <textarea id="edit-address" name="address" required>${esc(order.address)}</textarea>
+        <label for="edit-payment">Phương thức thanh toán</label>
+        <select id="edit-payment" name="payment" required>
+          <option value="COD" ${order.payment === 'COD' ? 'selected' : ''}>Thanh toán khi nhận hàng (COD mô phỏng)</option>
+          <option value="online" ${order.payment === 'online' ? 'selected' : ''}>Thanh toán trực tuyến mô phỏng</option>
+        </select><h3>Sản phẩm trong đơn</h3>${fields}
+        <button class="vp-btn vp-full" type="submit">LƯU THAY ĐỔI</button>
+        <button class="vp-btn secondary vp-full" type="button" data-action="orders">QUAY LẠI ĐƠN HÀNG</button>
+      </form></div>`);
+  }
+  function payment(o){modal('Thanh toán mô phỏng',`<div class="vp-body"><div class="vp-note">GIAO DỊCH THỬ NGHIỆM · Không thu tiền thật và không kết nối cổng thanh toán.</div>${demoQr(o)}<p>Chọn kết quả để kiểm thử luồng thanh toán:</p><button class="vp-btn vp-full" data-action="pay-result" data-id="${o.id}" data-result="ok">MÔ PHỎNG THÀNH CÔNG</button><button class="vp-btn secondary vp-full" data-action="pay-result" data-id="${o.id}" data-result="fail">MÔ PHỎNG THẤT BẠI</button></div>`);}
   function admin(tab='dashboard'){if(!adminLogged){modal('Đăng nhập quản trị',`<div class="vp-body"><div class="vp-note">Khu vực mô phỏng trên trình duyệt, không có xác thực bảo mật. Tài khoản: admin / admin123.</div><form data-form="admin-login" class="vp-form"><label>Tên đăng nhập</label><input name="username" required><label>Mật khẩu</label><input name="password" type="password" required><button class="vp-btn vp-full">ĐĂNG NHẬP</button></form></div>`);return;}
     let content='';const os=state.orders;
     if(tab==='dashboard')content=`<div class="vp-stats"><div class="vp-stat">Tổng đơn<strong>${os.length}</strong></div><div class="vp-stat">Chờ xử lý<strong>${os.filter(o=>o.status==='Chờ xác nhận').length}</strong></div><div class="vp-stat">Đã giao<strong>${os.filter(o=>o.status==='Đã giao').length}</strong></div></div><div class="vp-note">${serverMode?'Dữ liệu thử nghiệm lưu trong file JSON trên máy.':'Dữ liệu thử nghiệm trong trình duyệt này.'} Giá trị đơn hàng: ${money(os.reduce((a,o)=>a+o.total,0))} · Số phiên thử: ${state.visits} · Lượt thêm giỏ: ${state.cartEvents||0}. Không đại diện cho dữ liệu kinh doanh thực tế.</div><h3>Đơn hàng gần đây</h3>${os.length?os.slice(-3).reverse().map(o=>orderCard(o,true)).join(''):'<p class="vp-empty">Chưa có đơn hàng thử nghiệm.</p>'}`;
     if(tab==='orders')content=os.length?os.slice().reverse().map(o=>orderCard(o,true)).join(''):'<p class="vp-empty">Chưa có đơn hàng.</p>';
     if(tab==='stock')content=`<p class="vp-muted">Tồn khả dụng theo biến thể. ${serverMode?'Thay đổi lưu trong file JSON trên máy.':'Thay đổi chỉ lưu trên trình duyệt này.'}</p>${products.map(p=>`<div class="vp-order"><b>${esc(p.name)}</b><p>${esc(p.color)}</p><div class="vp-inline-actions">${sizesFor(p).map(s=>`<button class="vp-link" data-action="stock" data-id="${p.id}" data-size="${s}">${s}: ${available(p.id,s)} (+1)</button>`).join('')}</div></div>`).join('')}`;
+    if(tab==='requests')content=os.filter(o=>cancellationPending(o)||o.supportMessages?.length).map(o=>orderCard(o,true)).join('')||'<p class="vp-empty">Chưa có yêu cầu hủy hoặc hỗ trợ.</p>';
     if(tab==='returns')content=os.filter(o=>o.returnStatus).map(o=>orderCard(o,true)).join('')||'<p class="vp-empty">Chưa có yêu cầu đổi trả.</p>';
-    modal('Quản trị cửa hàng',`<div class="vp-body"><div class="vp-note">CHẾ ĐỘ MÔ PHỎNG · ${serverMode?'Dữ liệu lưu trong file JSON trên máy.':'Dữ liệu lưu trong trình duyệt.'} Không dùng cho vận hành thật.</div><div class="vp-tabs">${[['dashboard','Tổng quan'],['orders','Đơn hàng'],['stock','Tồn kho'],['returns','Đổi trả']].map(([k,v])=>`<button class="${tab===k?'active':''}" data-action="admin-tab" data-tab="${k}">${v}</button>`).join('')}<button data-action="admin-logout">Đăng xuất</button></div>${content}</div>`,true);
+    modal('Quản trị cửa hàng',`<div class="vp-body"><div class="vp-note">CHẾ ĐỘ MÔ PHỎNG · ${serverMode?'Dữ liệu lưu trong file JSON trên máy.':'Dữ liệu lưu trong trình duyệt.'} Không dùng cho vận hành thật.</div><div class="vp-tabs">${[['dashboard','Tổng quan'],['orders','Đơn hàng'],['stock','Tồn kho'],['returns','Đổi trả'],['requests','Hủy đơn & hỗ trợ']].map(([k,v])=>`<button class="${tab===k?'active':''}" data-action="admin-tab" data-tab="${k}">${v}</button>`).join('')}<button data-action="admin-logout">Đăng xuất</button></div>${content}</div>`,true);
   }
-  function adminOrder(id){const o=state.orders.find(x=>x.id===id);if(!o)return;modal('Xử lý '+o.id,`<div class="vp-body">${orderCard(o,false)}<div class="vp-line"></div><p><b>Cập nhật đơn & vận chuyển</b></p><div class="vp-inline-actions">${o.status==='Chờ xác nhận'?`<button class="vp-btn" data-action="order-step" data-id="${id}" data-step="confirm">Xác nhận đơn</button>`:''}${o.status==='Đã xác nhận'?`<button class="vp-btn" data-action="order-step" data-id="${id}" data-step="ship">Bàn giao vận chuyển</button>`:''}${o.status==='Đang giao'?`<button class="vp-btn" data-action="order-step" data-id="${id}" data-step="delivered">Giao thành công</button><button class="vp-btn secondary" data-action="order-step" data-id="${id}" data-step="failed">Giao thất bại</button>`:''}</div>${o.returnStatus&&o.returnStatus!=='Đã hoàn tất'?`<div class="vp-line"></div><p>Yêu cầu: ${esc(o.returnReason)}</p><button class="vp-btn" data-action="complete-return" data-id="${id}">XÁC NHẬN HOÀN TẤT VÀ NHẬP LẠI HÀNG</button>`:''}${o.status==='Đã giao'&&o.payment==='COD'?`<div class="vp-line"></div><p>Đối soát COD: ${esc(o.settlement||'Chưa đối soát')}</p><button class="vp-btn secondary" data-action="settle" data-id="${id}">GHI NHẬN ĐÃ THỰC NHẬN</button>`:''}<button class="vp-btn secondary vp-full" data-action="admin-tab" data-tab="orders">QUAY LẠI DANH SÁCH</button></div>`);}
+  function adminOrder(id){const o=state.orders.find(x=>x.id===id);if(!o)return;modal('Xử lý '+o.id,`<div class="vp-body">${orderCard(o,true,true)}${o.cancellation ? cancellationSection(o,true) : ''}${supportSection(o,true)}<div class="vp-line"></div><p><b>Cập nhật đơn & vận chuyển</b></p><div class="vp-inline-actions">${o.status==='Chờ xác nhận'?`<button class="vp-btn" data-action="order-step" data-id="${id}" data-step="confirm">Xác nhận đơn</button>`:''}${o.status==='Đã xác nhận'&&!cancellationPending(o)?`<button class="vp-btn" data-action="order-step" data-id="${id}" data-step="ship">Bàn giao vận chuyển</button>`:''}${o.status==='Đang giao'?`<button class="vp-btn" data-action="order-step" data-id="${id}" data-step="delivered">Giao thành công</button><button class="vp-btn secondary" data-action="order-step" data-id="${id}" data-step="failed">Giao thất bại</button>`:''}</div>${o.returnStatus&&o.returnStatus!=='Đã hoàn tất'?`<div class="vp-line"></div>${returnSummary(o)}${o.status==='Đã giao'?`<button class="vp-btn" data-action="complete-return" data-id="${id}">${o.returnExchange?'XÁC NHẬN ĐÃ ĐỔI SIZE':'XÁC NHẬN HOÀN TẤT VÀ NHẬP LẠI HÀNG'}</button>`:'<p>Yêu cầu đang chờ xử lý. Chỉ nhập lại hàng sau khi đơn đã giao và nhận lại sản phẩm.</p>'}`:''}${o.status==='Đã giao'&&o.payment==='COD'?`<div class="vp-line"></div><p>Đối soát COD: ${esc(o.settlement||'Chưa đối soát')}</p><button class="vp-btn secondary" data-action="settle" data-id="${id}">GHI NHẬN ĐÃ THỰC NHẬN</button>`:''}<button class="vp-btn secondary vp-full" data-action="admin-tab" data-tab="orders">QUAY LẠI DANH SÁCH</button></div>`);}
+  function showContactInfo() {
+    const info = publicPolicies?.storeInfo || {};
+    const phone = info.phone || 'Chưa cập nhật';
+    const email = info.email || 'Chưa cập nhật';
+    const hours = info.supportHours || 'Thứ 2 – Thứ 7, 08:00 – 17:00';
+    modal('LIÊN HỆ VỚI CHÚNG TÔI', `<div class="vp-body contact-details">
+      <section class="contact-card">
+        <h3>VIỆT PHỤC</h3>
+        <p>Việt Phục là dự án giới thiệu và kinh doanh các sản phẩm trang phục truyền thống Việt Nam.</p>
+        <p>Chúng tôi luôn sẵn sàng hỗ trợ khách hàng trong quá trình tìm hiểu sản phẩm, đặt hàng, thanh toán, đổi trả và các vấn đề phát sinh sau mua.</p>
+      </section>
+      <section class="contact-card">
+        <h3>THÔNG TIN LIÊN HỆ</h3>
+        <dl><dt>Hotline</dt><dd>${info.phone ? `<a href="tel:${esc(info.phone)}">${esc(phone)}</a>` : esc(phone)}</dd>
+          <dt>Email</dt><dd>${info.email ? `<a href="mailto:${esc(info.email)}">${esc(email)}</a>` : esc(email)}</dd>
+          <dt>Thời gian làm việc</dt><dd>${esc(hours)}</dd></dl>
+      </section>
+      <section class="contact-card"><h3>HỖ TRỢ KHÁCH HÀNG</h3>
+        <ul><li>Tư vấn sản phẩm</li><li>Hướng dẫn chọn size</li><li>Kiểm tra đơn hàng</li>
+          <li>Thanh toán đơn hàng</li><li>Đổi trả và hoàn tiền</li><li>Hỗ trợ khiếu nại</li>
+          <li>Tư vấn sử dụng và bảo quản sản phẩm</li></ul>
+      </section>
+    </div>`);
+    document.querySelector('.vp-overlay .vp-close')?.focus();
+  }
+
   document.addEventListener('click',async e=>{const el=e.target.closest('[data-action], [data-category]');if(!el)return;const action=el.dataset.action;if(el.dataset.category!==undefined&&!action){e.preventDefault();category=el.dataset.category;search='';renderProducts();document.getElementById('product-grid')?.scrollIntoView({behavior:'smooth',block:'start'});return;}
+    if (action === 'contact') {
+      showContactInfo();
+      return;
+    }
     if(action==='filter-reset'){el.closest('form')?.querySelectorAll('input[type="checkbox"]').forEach(input=>{input.checked=false;});return;}
-    if(action==='mobile-menu'){const nav=document.querySelector('.main-nav');if(nav){nav.classList.toggle('open');el.setAttribute('aria-expanded',String(nav.classList.contains('open')));}return;} if(action==='close'){close();return;} if(action==='product'){detail(el.dataset.id);return;} if(action==='detail-color'){selectedColor=el.dataset.color;selectedQty=1;renderDetail();return;} if(action==='size'){selectedSize=el.dataset.size;selectedQty=1;renderDetail();return;} if(action==='detail-qty'){const maxQ=Math.max(1,available(selectedProduct,selectedSize,selectedColor)-quantityInCart(selectedProduct,selectedSize,selectedColor));selectedQty=Math.max(1,Math.min(maxQ,selectedQty+(+el.dataset.delta)));renderDetail();return;} if(action==='add'){if(await add()){toast('Đã thêm sản phẩm vào giỏ hàng.');cart();}return;} if(action==='buy'){if(await add())checkout();return;}
-    if(action==='open-cart'){cart();return;}if(action==='open-account'){account(state.user?'profile':'login');return;}if(action==='open-admin'){window.location.href='admin.html';return;}if(action==='policy'){openPolicyCenter(el.dataset.policy||'pricing');return;}if(action==='close-policy'){closePolicyDrawer();return;}if(action==='open-return-form'){openCustomerReturnForm(el.dataset.id);return;}if(action==='open-orders'){if(serverMode){if(state.user)account('orders');else{toast('Vui lòng đăng nhập để xem đơn hàng.');account('login');}return;}try{await refreshDatabase();state.user?orders():account();}catch(err){toast(err.message);}return;}
+    if(action==='mobile-menu'){const nav=document.querySelector('.main-nav');if(nav){nav.classList.toggle('open');el.setAttribute('aria-expanded',String(nav.classList.contains('open')));}return;} if(action==='close'){close();return;} if(action==='product'){
+      if(productPage){
+        if(el.tagName==='A'&&(e.ctrlKey||e.metaKey||e.shiftKey||e.altKey))return;
+        e.preventDefault();
+        if(document.querySelector('.vp-overlay'))close();
+        navigateToProduct(el.dataset.id);
+        return;
+      }
+      detail(el.dataset.id);return;
+    }
+    if(action==='product-photo'){
+      if(productPage){
+        productPage.querySelector('.product-main-image').src=el.querySelector('img').src;
+        productPage.querySelectorAll('[data-action="product-photo"]').forEach(btn=>btn.setAttribute('aria-pressed',String(btn===el)));
+      }
+      return;
+    }
+    if(action==='detail-color'){selectedColor=el.dataset.color;selectedQty=1;if(productPage&&!productPage.hidden)renderProductSummary();else renderDetail();return;}
+    if(action==='size'){selectedSize=el.dataset.size;selectedQty=1;if(productPage&&!productPage.hidden)renderProductSummary();else renderDetail();return;}
+    if(action==='detail-qty'){const maxQ=Math.max(1,available(selectedProduct,selectedSize,selectedColor)-quantityInCart(selectedProduct,selectedSize,selectedColor));selectedQty=Math.max(1,Math.min(maxQ,selectedQty+(+el.dataset.delta)));if(productPage&&!productPage.hidden)renderProductSummary();else renderDetail();return;}
+    if(action==='add'){if(await add()){toast('Đã thêm sản phẩm vào giỏ hàng.');cart();}return;} if(action==='buy'){if(await add())checkout();return;}
+    if(action==='open-cart'){cart();return;}if(action==='open-account'){account(state.user?'profile':'login');return;}if(action==='open-admin'){window.location.href='admin.html';return;}if(action==='policy'){e.preventDefault();openPolicyCenter(el.dataset.policy||'pricing');return;}if(action==='close-policy'){closePolicyDrawer();return;}if(action==='open-return-form'){openCustomerReturnForm(el.dataset.id);return;}if(action==='open-orders'){if(serverMode){if(state.user)account('orders');else{toast('Vui lòng đăng nhập để xem đơn hàng.');account('login');}return;}try{await refreshDatabase();state.user?orders():account();}catch(err){toast(err.message);}return;}
     if(action==='customer-tab'){account(el.dataset.tab);return;}
     if(action==='customer-order-detail'){loadCustomerOrderDetail(el.dataset.id);return;}
     if(action==='toggle-pw'){const inp=el.previousElementSibling;if(inp){const show=inp.type==='password';inp.type=show?'text':'password';el.textContent=show?'Ẩn':'Hiện';}return;}
@@ -680,13 +1070,54 @@
     if(action==='open-search'){modal('Tìm kiếm',`<div class="vp-body"><form class="vp-form" data-form="search"><label>Bạn đang tìm kiếm điều gì?</label><input name="query" value="${esc(search)}" placeholder="Tên sản phẩm, danh mục (có hoặc không dấu)..." autofocus><button class="vp-btn vp-full">TÌM KIẾM</button></form><div class="vp-search-suggestions" id="vp-search-suggestions">${searchSuggestions(search)}</div></div>`);return;}
     if(action==='search-category'){showSearchResults('',el.dataset.name);return;}
     if(action==='qty'){const i=state.cart[+el.dataset.index];if(!i)return;let n=i.qty+(+el.dataset.delta);if(n<1)state.cart.splice(+el.dataset.index,1);else if(n<=available(i.id,i.size,i.color))i.qty=n;else toast('Số lượng vượt quá tồn kho.');save();updateCount();cart();return;}
-    if(action==='remove'){state.cart.splice(+el.dataset.index,1);save();updateCount();cart();return;}if(action==='clear-cart'){state.cart=[];save();updateCount();cart();return;}if(action==='apply-promo'){const inp=document.getElementById('vp-promo-input');checkoutPromoCode=String(inp?.value||'').trim().toUpperCase();refreshCheckoutPreview();return;}if(action==='remove-promo'){checkoutPromoCode='';const inp=document.getElementById('vp-promo-input');if(inp)inp.value='';refreshCheckoutPreview();return;}if(action==='customer-pay-sim'){try{const res=await apiCustomer(`/api/customer/orders/${encodeURIComponent(el.dataset.id)}/pay-simulate`,'POST',{action:el.dataset.sim});await refreshDatabase();if(res.expired)toast('Đơn hàng đã hết hạn giữ hàng 15 phút và đã giải phóng tồn kho.');else toast(el.dataset.sim==='success'?'Thanh toán mô phỏng thành công!':'Thanh toán mô phỏng thất bại.');if(el.dataset.confirm==='1')showOrderConfirmation(res.order);else loadCustomerOrderDetail(el.dataset.id);}catch(err){toast(err.message);}return;}if(action==='customer-cancel-order'){try{const res=await apiCustomer(`/api/customer/orders/${encodeURIComponent(el.dataset.id)}/cancel`,'POST',{reason:'Khách hàng hủy đơn'});await refreshDatabase();toast('Đã hủy đơn hàng và giải phóng tồn kho.');loadCustomerOrderDetail(el.dataset.id);}catch(err){toast(err.message);}return;}if(action==='checkout'){checkout();return;}if(action==='orders'){try{await refreshDatabase();orders();}catch(err){toast(err.message);}return;}if(action==='logout'){state.user=null;save();account();return;}
-    if(action==='cancel'){try{await commitShared(()=>{const o=state.orders.find(x=>x.id===el.dataset.id);if(!o||o.inventory!=='reserved')throw new Error('Đơn không còn đủ điều kiện hủy.');o.items.forEach(i=>changeStock(i.id,i.size,i.qty));o.inventory='released';o.status='Đã hủy';if(o.paymentStatus==='Thanh toán thành công')o.refund='Chờ hoàn tiền';o.history.push('Đã hủy đơn và giải phóng hàng giữ');});orders();}catch(err){toast(err.message);}return;}
-    if(action==='retry'){payment(state.orders.find(x=>x.id===el.dataset.id));return;}if(action==='pay-result'){try{const paymentStatus=await commitShared(()=>{const o=state.orders.find(x=>x.id===el.dataset.id);if(!o||o.status==='Đã hủy')throw new Error('Đơn hàng không còn hợp lệ.');o.paymentStatus=el.dataset.result==='ok'?'Thanh toán thành công':'Thanh toán thất bại';o.history.push(o.paymentStatus+' (mô phỏng)');return o.paymentStatus;});toast(paymentStatus+' (mô phỏng)');orders();}catch(err){toast(err.message);}return;}
-    if(action==='return'){modal('Yêu cầu đổi trả',`<div class="vp-body"><div class="vp-note">Yêu cầu đổi trả thử nghiệm cho đơn ${esc(el.dataset.id)}.</div><form class="vp-form" data-form="return" data-id="${esc(el.dataset.id)}"><label>Lý do</label><textarea name="reason" required placeholder="Mô tả vấn đề bạn gặp phải"></textarea><button class="vp-btn vp-full">GỬI YÊU CẦU</button></form></div>`);return;}
+    if(action==='remove'){state.cart.splice(+el.dataset.index,1);save();updateCount();cart();return;}if(action==='clear-cart'){state.cart=[];save();updateCount();cart();return;}if(action==='apply-promo'){const inp=document.getElementById('vp-promo-input');checkoutPromoCode=String(inp?.value||'').trim().toUpperCase();refreshCheckoutPreview();return;}if(action==='remove-promo'){checkoutPromoCode='';const inp=document.getElementById('vp-promo-input');if(inp)inp.value='';refreshCheckoutPreview();return;}if(action==='customer-pay-sim'){try{const res=await apiCustomer(`/api/customer/orders/${encodeURIComponent(el.dataset.id)}/pay-simulate`,'POST',{action:el.dataset.sim});await refreshDatabase();if(res.expired)toast('Đơn hàng đã hết hạn giữ hàng 15 phút và đã giải phóng tồn kho.');else toast(el.dataset.sim==='success'?'Thanh toán mô phỏng thành công!':'Thanh toán mô phỏng thất bại.');if(el.dataset.confirm==='1')showOrderConfirmation(res.order);else loadCustomerOrderDetail(el.dataset.id);}catch(err){toast(err.message);}return;}if(action==='checkout'){checkout();return;}if(action==='orders'){try{await refreshDatabase();orders();}catch(err){toast(err.message);}return;}if(action==='logout'){state.user=null;save();account();return;}
+    if(action==='cancel'){
+      try {
+        await refreshDatabase();
+        const order = state.orders.find(item => item.id === el.dataset.id && item.email === state.user?.email);
+        if (!order || !canRequestCancellation(order)) throw new Error('Đơn không còn đủ điều kiện gửi yêu cầu hủy.');
+        modal('Yêu cầu hủy đơn', `<div class="vp-body">
+          <p>Đơn ${esc(order.id)} sẽ được giữ trong lúc cửa hàng xem xét yêu cầu hủy.</p>
+          <form class="vp-form" data-form="request-cancellation" data-id="${esc(order.id)}">
+            <label for="cancel-reason">Lý do hủy</label>
+            <textarea id="cancel-reason" name="reason" required maxlength="500"></textarea>
+            <button class="vp-btn vp-full" type="submit">Gửi yêu cầu hủy</button>
+            <button class="vp-btn secondary vp-full" type="button" data-action="order-detail" data-id="${esc(order.id)}">Về chi tiết đơn</button>
+          </form></div>`);
+      } catch (error) { toast(error.message); }
+      return;
+    }
+    if(action==='retry'){
+      try {
+        await refreshDatabase();
+        const order = state.orders.find(item => item.id === el.dataset.id && item.email === state.user?.email);
+        if (!order || !canPayOnline(order)) throw new Error('Đơn hàng không thể tiếp tục thanh toán.');
+        payment(order);
+      } catch (error) { toast(error.message); }
+      return;
+    }if(action==='pay-result'){try{const paymentStatus=await commitShared(()=>{const o=state.orders.find(x=>x.id===el.dataset.id);if(!o||o.email!==state.user?.email||!canPayOnline(o))throw new Error('Đơn hàng không còn hợp lệ.');o.paymentStatus=el.dataset.result==='ok'?'Thanh toán thành công':'Thanh toán thất bại';addOrderHistory(o, o.paymentStatus+' (mô phỏng)');return o.paymentStatus;});toast(paymentStatus+' (mô phỏng)');orderDetail(el.dataset.id);}catch(err){toast(err.message);}return;}
+    if(action==='order-detail'){try{await refreshDatabase();orderDetail(el.dataset.id);}catch(error){toast(error.message);}return;}
+    if(action==='edit-order'){try{await refreshDatabase();editOrder(el.dataset.id);}catch(error){toast(error.message);}return;}
+    if(action==='return'){
+      try {
+        await refreshDatabase();
+        const order = state.orders.find(item => item.id === el.dataset.id && item.email === state.user?.email);
+        if (!order || !canRequestReturn(order)) throw new Error('Đơn hàng không đủ điều kiện đổi trả.');
+        returnForm(order);
+      } catch (error) { toast(error.message); }
+      return;
+    }
     if(action==='admin-tab'){try{await refreshDatabase();admin(el.dataset.tab);}catch(err){toast(err.message);}return;}if(action==='admin-logout'){adminLogged=false;admin();return;}if(action==='admin-order'){try{await refreshDatabase();adminOrder(el.dataset.id);}catch(err){toast(err.message);}return;}if(action==='stock'){try{await commitShared(()=>changeStock(el.dataset.id,el.dataset.size,1));admin('stock');}catch(err){toast(err.message);}return;}
-    if(action==='order-step'){try{await commitShared(()=>{const o=state.orders.find(x=>x.id===el.dataset.id),step=el.dataset.step;if(!o)throw new Error('Không tìm thấy đơn hàng.');if(step==='confirm'&&o.status==='Chờ xác nhận')o.status='Đã xác nhận';else if(step==='ship'&&o.status==='Đã xác nhận'){o.status='Đang giao';o.shipStatus='Đang vận chuyển';o.inventory='issued';}else if(step==='delivered'&&o.status==='Đang giao'){o.status='Đã giao';o.shipStatus='Giao thành công';if(o.payment==='COD')o.paymentStatus='Thanh toán thành công';}else if(step==='failed'&&o.status==='Đang giao'){o.shipStatus='Giao thất bại';}else throw new Error('Trạng thái đơn đã thay đổi. Vui lòng kiểm tra lại.');o.history.push(o.status+' / '+o.shipStatus);});adminOrder(el.dataset.id);}catch(err){toast(err.message);}return;}
-    if(action==='complete-return'||action==='refund'||action==='settle'){try{await commitShared(()=>{const o=state.orders.find(x=>x.id===el.dataset.id);if(!o)throw new Error('Không tìm thấy đơn hàng.');if(action==='complete-return'){if(!o.returnStatus||o.returnStatus==='Đã hoàn tất')throw new Error('Yêu cầu đổi trả đã thay đổi.');if(o.inventory==='issued'){o.items.forEach(i=>changeStock(i.id,i.size,i.qty));o.inventory='returned';}o.returnStatus='Đã hoàn tất';o.refund='Chờ hoàn tiền';o.history.push('Đã nhận lại và kiểm tra hàng');}if(action==='refund'){o.refund='Đã hoàn tiền (mô phỏng)';o.paymentStatus='Đã hoàn toàn bộ';o.history.push(o.refund);}if(action==='settle'){o.settlement='Đã thực nhận tiền (mô phỏng)';o.history.push(o.settlement);}});adminOrder(el.dataset.id);}catch(err){toast(err.message);}return;}
+    if(action==='order-step'){try{await commitShared(()=>{const o=state.orders.find(x=>x.id===el.dataset.id),step=el.dataset.step;if(!o)throw new Error('Không tìm thấy đơn hàng.');if(step==='confirm'&&o.status==='Chờ xác nhận')o.status='Đã xác nhận';else if(step==='ship'&&o.status==='Đã xác nhận'&&!cancellationPending(o)){o.status='Đang giao';o.shipStatus='Đang vận chuyển';o.inventory='issued';}else if(step==='delivered'&&o.status==='Đang giao'){o.status='Đã giao';o.shipStatus='Giao thành công';o.deliveredAt=new Date().toISOString();if(o.payment==='COD')o.paymentStatus='Thanh toán thành công';}else if(step==='failed'&&o.status==='Đang giao'){o.shipStatus='Giao thất bại';}else throw new Error('Trạng thái đơn đã thay đổi. Vui lòng kiểm tra lại.');addOrderHistory(o, o.status+' / '+o.shipStatus);});adminOrder(el.dataset.id);}catch(err){toast(err.message);}return;}
+    if(action==='complete-return'||action==='refund'||action==='settle'){try{await commitShared(()=>{const o=state.orders.find(x=>x.id===el.dataset.id);if(!o)throw new Error('Không tìm thấy đơn hàng.');if(action==='complete-return'){if(!o.returnStatus||o.returnStatus==='Đã hoàn tất'||o.status!=='Đã giao')throw new Error('Chỉ hoàn tất sau khi đơn đã giao và nhận lại hàng.');if(o.returnExchange){
+      const exchange = o.returnExchange;
+      if(o.inventory!=='issued' || available(exchange.id, exchange.newSize)<exchange.qty) throw new Error('Không đủ tồn kho để hoàn tất đổi size.');
+      changeStock(exchange.id, exchange.newSize, -exchange.qty);
+      changeStock(exchange.id, exchange.oldSize, exchange.qty);
+      o.returnStatus='Đã hoàn tất';
+      addOrderHistory(o, 'Đã hoàn tất đổi size');
+      return;
+    }if(o.inventory==='issued'){o.items.forEach(i=>changeStock(i.id,i.size,i.qty));o.inventory='returned';}o.returnStatus='Đã hoàn tất';o.refund='Chờ hoàn tiền';addOrderHistory(o, 'Đã nhận lại và kiểm tra hàng');}if(action==='refund'){o.refund='Đã hoàn tiền (mô phỏng)';o.paymentStatus='Đã hoàn toàn bộ';addOrderHistory(o, o.refund);}if(action==='settle'){o.settlement='Đã thực nhận tiền (mô phỏng)';addOrderHistory(o, o.settlement);}});adminOrder(el.dataset.id);}catch(err){toast(err.message);}return;}
   });
   document.addEventListener('input',e=>{
     if(e.target.matches('[data-form="search"] input[name="query"]')){const box=document.getElementById('vp-search-suggestions');if(box)box.innerHTML=searchSuggestions(e.target.value);}
@@ -696,6 +1127,36 @@
     if(e.target.matches('[data-form="customer-checkout"] select[name="shippingType"], [data-form="customer-checkout"] select[name="paymentMethod"], [data-form="customer-checkout"] input[name="province"]')){refreshCheckoutPreview();}
   });
   document.addEventListener('submit',async e=>{const form=e.target.closest('[data-form]');if(!form)return;e.preventDefault();const data=new FormData(form),type=form.dataset.form;
+    if (type === 'cancel-order' || type === 'edit-order-details') {
+      const button = form.querySelector('button[type="submit"]');
+      if (button.disabled) return;
+      button.disabled = true;
+      try {
+        const reason = String(data.get('reason') || '').trim();
+        const cancelling = type === 'cancel-order';
+        if (cancelling && !reason) throw new Error('Vui lòng nhập lý do hủy đơn.');
+        if (!serverMode && cancelling) {
+          await commitShared(()=>{const o=state.orders.find(x=>x.id===form.dataset.id);if(!o||o.email!==state.user?.email||o.inventory!=='reserved')throw new Error('Đơn không còn đủ điều kiện hủy.');o.items.forEach(i=>changeStock(i.id,i.size,i.qty));o.inventory='released';o.status='Đã hủy';if(o.paymentStatus==='Thanh toán thành công')o.refund='Chờ hoàn tiền';o.history.push('Khách hủy đơn: '+reason);});
+          orders();
+        } else {
+          const endpoint = cancelling ? 'cancel' : 'details';
+          const payload = cancelling ? {reason} : {
+            address: data.get('address'), skus: data.getAll('sku'), version: Number(form.dataset.version)
+          };
+          await apiCustomer(`/api/customer/orders/${encodeURIComponent(form.dataset.id)}/${endpoint}`, 'POST', payload);
+          await loadCustomerOrderDetail(form.dataset.id);
+          await refreshDatabase();
+        }
+        toast(cancelling ? 'Đã hủy đơn hàng.' : 'Đã lưu thay đổi đơn hàng.');
+      } catch (err) { toast(err.message); }
+      finally { button.disabled = false; }
+      return;
+    }
+    if (type === 'contact-feedback') {
+      form.reset();
+      toast('Chúng tôi đã nhận được phản hồi của bạn.');
+      return;
+    }
     if(type==='customer-checkout'){
       if(isSubmittingOrder)return;
       isSubmittingOrder=true;
@@ -731,7 +1192,7 @@
       return;
     }
     if(type==='filters'){filters={sizes:data.getAll('sizes'),colors:data.getAll('colors'),prices:data.getAll('prices')};close();renderProducts();return;}
-    if(type==='search'){search=String(data.get('query')||'').trim();category='Tất cả';close();renderProducts();document.getElementById('product-grid')?.scrollIntoView({behavior:'smooth'});return;}
+    if(type==='search'){showSearchResults(String(data.get('query') || ''));return;}
     if(type==='login'){state.user={name:String(data.get('name')).trim(),email:String(data.get('email')).trim().toLowerCase()};save();toast('Đã đăng nhập tài khoản thử nghiệm.');account();return;}
     if(type==='customer-login'){
       const email=String(data.get('email')||'').trim().toLowerCase(),password=String(data.get('password')||'');
@@ -812,13 +1273,165 @@
       return;
     }
     if(type==='admin-login'){if(data.get('username')==='admin'&&data.get('password')==='admin123'){adminLogged=true;admin();}else toast('Tài khoản hoặc mật khẩu không đúng.');return;}
-    if(type==='return'){try{await commitShared(()=>{const o=state.orders.find(x=>x.id===form.dataset.id);if(!o||o.status!=='Đã giao'||o.returnStatus)throw new Error('Đơn không còn đủ điều kiện đổi trả.');o.returnStatus='Chờ xử lý';o.returnReason=String(data.get('reason'));o.history.push('Đã gửi yêu cầu đổi trả');});toast('Đã gửi yêu cầu thử nghiệm.');orders();}catch(err){toast(err.message);}return;}
+    if(type==='request-cancellation'||type==='resolve-cancellation'){
+      try {
+        const isAdmin = type === 'resolve-cancellation';
+        const decision = e.submitter?.value || data.get('decision');
+        const message = String(data.get(isAdmin ? 'response' : 'reason') || '').trim();
+        if (message.length > 500 || (!message && (!isAdmin || decision === 'reject'))) {
+          throw new Error('Vui lòng nhập lý do từ 1 đến 500 ký tự.');
+        }
+        if (isAdmin && (!adminLogged || !['approve','reject'].includes(decision))) {
+          throw new Error('Thao tác xử lý yêu cầu không hợp lệ.');
+        }
+        await commitShared(() => {
+          const order = state.orders.find(item => item.id === form.dataset.id);
+          if (!isAdmin) {
+            if (!order || order.email !== state.user?.email || !canRequestCancellation(order)) {
+              throw new Error('Đơn không còn đủ điều kiện gửi yêu cầu hủy.');
+            }
+            order.cancellation = {status:'Chờ xử lý', reason:message, requestedAt:new Date().toISOString()};
+            addOrderHistory(order,'Khách đã gửi yêu cầu hủy đơn');
+            return;
+          }
+          if (!order || !cancellationPending(order) || order.inventory !== 'reserved') {
+            throw new Error('Yêu cầu hủy không còn đủ điều kiện xử lý.');
+          }
+          order.cancellation.response = message;
+          if (decision === 'reject') {
+            order.cancellation.status = 'Đã từ chối';
+            addOrderHistory(order,'Cửa hàng đã từ chối yêu cầu hủy');
+            return;
+          }
+          for (const item of order.items) changeStock(item.id,item.size,item.qty);
+          order.cancellation.status = 'Đã duyệt';
+          order.status = 'Đã hủy';
+          order.shipStatus = 'Đã hủy vận chuyển';
+          order.inventory = 'released';
+          if (order.paymentStatus === 'Thanh toán thành công') order.refund = 'Chờ hoàn tiền';
+          addOrderHistory(order,'Cửa hàng đã duyệt hủy đơn');
+        });
+        if (isAdmin) adminOrder(form.dataset.id);
+        else orderDetail(form.dataset.id);
+        toast(isAdmin ? 'Đã cập nhật yêu cầu hủy.' : 'Đã gửi yêu cầu hủy.');
+      } catch (error) { toast(error.message); }
+      return;
+    }
+    if(type==='support-request'||type==='support-reply'){
+      try {
+        const isAdmin = type === 'support-reply';
+        const body = String(data.get('body') || '').trim();
+        const topic = isAdmin ? '' : String(data.get('topic') || '');
+        if (!body || body.length > 1000) throw new Error('Vui lòng nhập nội dung từ 1 đến 1.000 ký tự.');
+        if (!isAdmin && !['Giao hàng chậm','Vấn đề thanh toán','Vấn đề khác'].includes(topic)) {
+          throw new Error('Vui lòng chọn vấn đề cần hỗ trợ.');
+        }
+        await commitShared(() => {
+          const order = state.orders.find(item => item.id === form.dataset.id);
+          if (!order || (isAdmin ? !adminLogged || !order.supportMessages?.length : order.email !== state.user?.email)) {
+            throw new Error('Không thể gửi tin nhắn cho đơn này.');
+          }
+          (order.supportMessages ||= []).push({role:isAdmin ? 'admin' : 'customer', topic, body, at:new Date().toISOString()});
+          addOrderHistory(order,isAdmin ? 'Cửa hàng đã phản hồi hỗ trợ' : 'Khách đã gửi yêu cầu hỗ trợ');
+        });
+        if (isAdmin) adminOrder(form.dataset.id);
+        else orderDetail(form.dataset.id);
+        toast('Đã gửi tin nhắn.');
+      } catch (error) { toast(error.message); }
+      return;
+    }
+    if(type==='return'){
+      try {
+        const reason = String(data.get('reason') || '').trim();
+        const choice = String(data.get('choice') || '');
+        if (!reason || reason.length > 500) throw new Error('Vui lòng nhập lý do từ 1 đến 500 ký tự.');
+        await commitShared(() => {
+          const order = state.orders.find(item => item.id === form.dataset.id && item.email === state.user?.email);
+          if (!order || !canRequestReturn(order)) throw new Error('Đơn hàng không đủ điều kiện đổi trả.');
+          if (choice !== 'return') {
+            const match = /^(\d+):(.+)$/.exec(choice);
+            const item = match && order.items[Number(match[1])];
+            const product = item && find(item.id);
+            const size = match?.[2];
+            if (!product || size === item.size || !sizesFor(product).includes(size)) {
+              throw new Error('Vui lòng chọn phương án đổi trả hợp lệ.');
+            }
+            if (available(item.id, size) < item.qty) throw new Error('Size mới hiện không đủ hàng.');
+            order.returnExchange = {id: item.id, name: item.name, oldSize: item.size, newSize: size, qty: item.qty};
+          }
+          order.returnStatus = 'Chờ xử lý';
+          order.returnReason = reason;
+          addOrderHistory(order,order.returnExchange ? 'Đã gửi yêu cầu đổi size' : 'Đã gửi yêu cầu trả hàng');
+        });
+        orderDetail(form.dataset.id);
+        toast('Đã gửi yêu cầu.');
+      } catch (error) { toast(error.message); }
+      return;
+    }
+    if(type==='edit-order'){
+      try {
+        const address = String(data.get('address') || '').trim();
+        const method = String(data.get('payment') || '');
+        if (!address) throw new Error('Vui lòng nhập địa chỉ nhận hàng.');
+        if (!['COD', 'online'].includes(method)) throw new Error('Phương thức thanh toán không hợp lệ.');
+        const updated = await commitShared(() => {
+          const order = state.orders.find(item => item.id === form.dataset.id);
+          if (!order || order.email !== state.user?.email || order.status !== 'Chờ xác nhận' ||
+              order.inventory !== 'reserved' || cancellationPending(order) || order.paymentStatus === 'Thanh toán thành công') {
+            throw new Error('Đơn hàng không còn đủ điều kiện chỉnh sửa.');
+          }
+          if (String(data.get('snapshot') || '') !== orderEditSnapshot(order)) {
+            throw new Error('Đơn hàng đã thay đổi. Vui lòng mở lại biểu mẫu.');
+          }
+          const changes = new Map();
+          const selectedSizes = [];
+          function addChange(id, size, amount) {
+            const stockKey = key(id, size);
+            const change = changes.get(stockKey);
+            if (change) change.amount += amount;
+            else changes.set(stockKey, {id, size, amount});
+          }
+          order.items.forEach((item, index) => {
+            const product = find(item.id);
+            const size = String(data.get(`size_${index}`) || '');
+            if (!size) throw new Error('Vui lòng chọn size cho sản phẩm.');
+            if (size !== item.size) {
+              if (!product || !sizesFor(product).includes(size)) {
+                throw new Error(`Size của sản phẩm "${item.name}" không hợp lệ.`);
+              }
+              addChange(item.id, item.size, item.qty);
+              addChange(item.id, size, -item.qty);
+            }
+            selectedSizes.push(size);
+          });
+          for (const change of changes.values()) {
+            if (available(change.id, change.size) + change.amount < 0) {
+              throw new Error(`Sản phẩm "${find(change.id)?.name || change.id}" không đủ hàng ở size ${change.size}.`);
+            }
+          }
+          for (const change of changes.values()) changeStock(change.id, change.size, change.amount);
+          order.items.forEach((item, index) => { item.size = selectedSizes[index]; });
+          order.address = address;
+          if (order.payment !== method) {
+            order.payment = method;
+            order.paymentStatus = 'Chưa thanh toán';
+          }
+          addOrderHistory(order, 'Khách hàng cập nhật địa chỉ, thanh toán hoặc size');
+          return order;
+        });
+        toast('Đã cập nhật đơn hàng.');
+        if (updated.payment === 'online' && updated.paymentStatus !== 'Thanh toán thành công') payment(updated);
+        else orderDetail(updated.id);
+      } catch (error) { toast(error.message); }
+      return;
+    }
     if(type==='checkout'){
       try{const o=await commitShared(()=>{
-        for(const i of state.cart){if(!find(i.id)||i.qty>available(i.id,i.size))throw new Error('Một sản phẩm không còn đủ hàng. Vui lòng kiểm tra giỏ hàng.');}
+        if (!state.cart.length) throw new Error('Giỏ hàng đang trống.');
+        if (state.cart.some(cartStockIssue)) throw new Error('Một sản phẩm không còn đủ hàng. Vui lòng kiểm tra giỏ hàng.');
         const ship=Number(data.get('shipping')),items=state.cart.map(i=>{let p=find(i.id);return {id:i.id,name:p.name,color:p.color,size:i.size,qty:i.qty,price:p.price};});
-        items.forEach(i=>changeStock(i.id,i.size,-i.qty));const id='VP'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,6).toUpperCase();let order={id,date:new Date().toLocaleString('vi-VN'),email:state.user.email,receiver:String(data.get('receiver')),phone:String(data.get('phone')),address:String(data.get('address')),items,total:subtotal()+ship,shippingFee:ship,payment:String(data.get('payment')),status:'Chờ xác nhận',shipStatus:'Chờ bàn giao',paymentStatus:'Chưa thanh toán',inventory:'reserved',settlement:'Chưa đối soát',policy:'Chính sách thử nghiệm: đổi trả trong 7 ngày theo điều kiện cửa hàng.',history:['Tạo đơn và giữ hàng']};state.orders.push(order);return order;});
-        state.cart=[];save();updateCount();if(o.payment==='online')payment(o);else {toast('Đã tạo đơn hàng thử nghiệm '+o.id);orders();}
+        items.forEach(i=>changeStock(i.id,i.size,-i.qty));const id='VP'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,6).toUpperCase();let order={id,date:new Date().toLocaleString('vi-VN'),email:state.user.email,receiver:String(data.get('receiver')),phone:String(data.get('phone')),address:String(data.get('address')),items,total:subtotal()+ship,shippingFee:ship,payment:String(data.get('payment')),status:'Chờ xác nhận',shipStatus:'Chờ bàn giao',paymentStatus:'Chưa thanh toán',inventory:'reserved',settlement:'Chưa đối soát',policy:'Chính sách thử nghiệm: đổi trả trong 7 ngày theo điều kiện cửa hàng.',history:[{label:'Tạo đơn và giữ hàng',at:new Date().toISOString()}]};state.orders.push(order);return order;});
+        state.cart=[];save();updateCount();if(o.payment==='online')payment(o);else {toast('Đã tạo đơn hàng thử nghiệm '+o.id);orderDetail(o.id);}
       }catch(err){toast(err.message);}return;
     }
   });
@@ -829,5 +1442,19 @@
   document.getElementById('catalog-category')?.addEventListener('change',e=>{category=e.target.value;renderProducts();});
   document.getElementById('catalog-sort')?.addEventListener('change',e=>{sort=e.target.value;renderProducts();});
   window.VietPhuc={products,getState:()=>state,renderProducts};
-  renderProducts();updateCount();initializeDatabase();
+  renderProducts();updateCount();
+  if (productPage) {
+    window.addEventListener('hashchange', router);
+    window.addEventListener('popstate', router);
+    router();
+  }
+  initializeDatabase().then(() => {
+    if (!serverMode) return;
+    catalogLoaded = true;
+    renderProducts();
+    if (productPage && !productPage.hidden) {
+      currentHash = undefined;
+      router();
+    }
+  });
 })();

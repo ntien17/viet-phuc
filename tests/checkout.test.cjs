@@ -222,6 +222,34 @@ async function stop() {
     assert.equal(cusViewOrder.body.order.orderStatus, 'confirmed');
     console.log('PASS GĐ3 COD order creation, anti-tampering, idempotency, and Admin->Customer sync');
 
+    const editUrl = `/api/customer/orders/${codOrder.id}/details`;
+    const alternate = p1.variants.find(v => v.active && v.sku !== v1.sku && boot.body.state.stock[v.sku] >= 2);
+    const editedAddress = '12 Nguyễn Huệ, TP.HCM';
+    const edits = { address: editedAddress, skus: [alternate.sku], version: cusViewOrder.body.order.history.length };
+    assert.equal((await reqJson('POST', editUrl, edits, otherH)).status, 404);
+    assert.equal((await reqJson('POST', editUrl, {...edits, skus: ['missing-sku']}, cusH)).status, 409);
+    const change = await reqJson('POST', editUrl, edits, cusH);
+    assert.equal(change.status, 200, JSON.stringify(change.body));
+    assert.equal(change.body.order.address, editedAddress);
+    assert.equal(change.body.order.items[0].sku, alternate.sku);
+    assert.equal(change.body.order.total, codOrder.total);
+    assert.equal((await reqJson('POST', editUrl, edits, cusH)).status, 409);
+    const changedState = (await reqJson('GET', '/api/admin/bootstrap', undefined, admH)).body.state;
+    assert.equal(changedState.stock[v1.sku], initialStock);
+    assert.equal(changedState.stock[alternate.sku], boot.body.state.stock[alternate.sku] - 2);
+    assert.equal((await reqJson('POST', editUrl, {...edits, skus:[v1.sku], version:change.body.order.history.length}, cusH)).status, 200);
+    const separate = (await reqJson('POST', '/api/customer/orders', {
+      items:[{productId:p1.id, sku:v1.sku, qty:1}], receiver:'Khách thử', phone:'0901234567',
+      province:'Hà Nội', address:'12 Tràng Tiền', paymentMethod:'COD'
+    }, cusH)).body.order;
+    assert.equal((await reqJson('POST', `/api/customer/orders/${separate.id}/details`, edits, cusH)).status, 409);
+    const cancelUrl = `/api/customer/orders/${separate.id}/cancel`;
+    assert.equal((await reqJson('POST', cancelUrl, {reason:'  '}, cusH)).status, 400);
+    const canceled = await reqJson('POST', cancelUrl, {reason:'Tôi đã đặt nhầm mẫu'}, cusH);
+    assert.equal(canceled.status, 200);
+    assert.equal(canceled.body.order.history.at(-1).note, 'Tôi đã đặt nhầm mẫu');
+    assert.equal((await reqJson('POST', cancelUrl, {reason:'Thử lại'}, cusH)).status, 409);
+
     // 4. Online simulated payment + 15-min hold + cancel & expire release stock once
     const onlineRes = await reqJson('POST', '/api/customer/orders', {
       items: [{ productId: p1.id, sku: v1.sku, qty: 1 }],
