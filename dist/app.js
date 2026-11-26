@@ -222,18 +222,9 @@
   .vp-product{min-width:0}.vp-product-image{position:relative;display:block;width:100%;aspect-ratio:3/4;border:0;padding:0;background:#ede9e3;overflow:hidden;cursor:pointer}.vp-product-image img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .6s}.vp-product-image:hover img{transform:scale(1.04)}.vp-product-tag{position:absolute;left:12px;top:12px;background:#f8f6f0;padding:6px 8px;font:600 9px Arial;letter-spacing:.08em}.vp-product-view{position:absolute;bottom:0;left:0;right:0;padding:14px;color:white;background:#25231f;font:600 10px Arial;letter-spacing:.1em;transform:translateY(100%);transition:.25s}.vp-product-image:hover .vp-product-view{transform:translateY(0)}.vp-product-info{padding:15px 0 23px}.vp-product-category{font-size:11px;color:#8f8980;margin-bottom:7px}.vp-product-name{border:0;background:none;padding:0;text-align:left;cursor:pointer;font-size:14px;font-weight:600;color:#25231f}.vp-product-price{font-size:14px;margin-top:8px;font-weight:600}.vp-product-price del{font-weight:400;color:#aaa;margin-left:7px}.vp-swatches{display:flex;align-items:center;gap:7px;margin-top:11px;color:#928a80}.vp-swatches span{width:13px;height:13px;border-radius:50%;background:#8f5147;border:2px solid white;outline:1px solid #b8a79e}.vp-swatches small{font-size:10px}.vp-overlay{position:fixed;inset:0;z-index:9999;background:rgba(26,24,21,.5);display:flex;justify-content:flex-end;align-items:stretch}.vp-overlay.center{align-items:center;justify-content:center;padding:24px}.vp-panel{background:#fcfbf8;color:#292824;width:min(100%,510px);height:100%;overflow:auto;box-shadow:0 12px 48px #0002;font-family:Arial,sans-serif}.vp-overlay.center .vp-panel{width:min(100%,900px);height:auto;max-height:90vh}.vp-head{position:sticky;top:0;background:#fcfbf8;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:23px 26px;border-bottom:1px solid #e9e6df}.vp-head h2{font:400 25px Georgia,serif;margin:0}.vp-close{font-size:26px;line-height:1;border:0;background:none;cursor:pointer;color:#222}.vp-body{padding:26px}.vp-body p{line-height:1.65}.vp-muted{font-size:12px;color:#807b72;line-height:1.6}.vp-note{background:#f2eee5;padding:13px 15px;font-size:12px;line-height:1.6;margin:15px 0}.vp-btn{display:inline-flex;justify-content:center;align-items:center;gap:8px;border:1px solid #272621;background:#272621;color:white;padding:14px 18px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;cursor:pointer;text-decoration:none}.vp-btn:hover{background:#5a3a33}.vp-btn.secondary{background:transparent;color:#25231f}.vp-btn:disabled{opacity:.4;cursor:not-allowed}.vp-full{width:100%;margin-top:12px}.vp-form label{font-size:12px;font-weight:600;display:block;margin:16px 0 7px}.vp-form input,.vp-form select,.vp-form textarea,.vp-input{width:100%;border:1px solid #d9d5cc;background:#fff;padding:13px;font:14px Arial;color:#292824;border-radius:0;box-sizing:border-box}.vp-form textarea{min-height:80px;resize:vertical}.vp-row{display:flex;justify-content:space-between;gap:12px;align-items:center}.vp-line{border-top:1px solid #e9e6df;margin:20px 0}.vp-item{display:flex;gap:16px;padding:16px 0;border-bottom:1px solid #eeeae3}.vp-item img{width:80px;height:105px;object-fit:cover;background:#eee}.vp-item-info{flex:1;min-width:0}.vp-item h3{font-size:14px;margin:2px 0 8px}.vp-item p{font-size:12px;color:#827c74;margin:5px 0}.vp-link{border:0;background:none;padding:0;text-decoration:underline;cursor:pointer;font-size:12px;color:#5d544d}.vp-qty{display:inline-flex;border:1px solid #ddd;align-items:center;margin-top:8px}.vp-qty button{border:0;background:none;padding:7px 11px;cursor:pointer}.vp-qty span{font-size:12px}.vp-detail{display:grid;grid-template-columns:1fr 1fr}.vp-detail img{width:100%;height:100%;max-height:680px;object-fit:cover}.vp-detail-info{padding:35px}.vp-detail h3{font:400 32px Georgia,serif;margin:10px 0 14px}.vp-detail-price{font-size:20px;font-weight:bold}.vp-size{display:flex;gap:8px;margin:12px 0}.vp-size button{background:white;border:1px solid #d5d0c8;min-width:42px;height:42px;cursor:pointer}.vp-size button.active{background:#272621;color:white;border-color:#272621}.vp-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 20px}.vp-tabs button{background:none;border:1px solid #ded9d0;padding:9px;cursor:pointer;font-size:11px}.vp-tabs button.active{background:#292824;color:white}.vp-order{border:1px solid #e3dfd7;padding:16px;margin:12px 0}.vp-order h3{font-size:14px;margin:0}.vp-order p{font-size:12px;margin:6px 0}.vp-status{display:inline-block;background:#e9eee5;color:#415b3f;padding:6px 8px;font-size:10px}.vp-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.vp-stat{background:#f2eee7;padding:15px}.vp-stat strong{display:block;font:24px Georgia;margin-top:8px}.vp-toast{position:fixed;bottom:25px;left:50%;transform:translateX(-50%);z-index:10001;background:#292824;color:white;padding:14px 22px;font:13px Arial;box-shadow:0 5px 20px #0003}.vp-empty{color:#817a70;padding:35px 0;font-size:14px}.vp-product-image img{color:#80796f}.vp-inline-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}@media(max-width:650px){.vp-overlay.center{padding:0;align-items:stretch}.vp-overlay.center .vp-panel{height:100%;max-height:none}.vp-detail{grid-template-columns:1fr}.vp-detail img{max-height:380px}.vp-detail-info{padding:24px}.vp-stats{grid-template-columns:1fr 1fr}.vp-body{padding:20px}.vp-head{padding:20px}}
   `;
   const filterCss=`
-    .vp-stock{display:flex;flex-wrap:wrap;gap:3px 10px;font-size:13px;margin:7px 0 0}.vp-stock-in{color:#21603d;font-weight:600}.vp-stock-out{color:#912d37;font-weight:600}.vp-filter-form{display:flex;flex-direction:column;min-height:calc(100% - 76px);background:#fff}.vp-filter-content{flex:1;padding:12px 28px 25px}.vp-filter-group{border:0;border-bottom:1px solid #eee8e4;padding:14px 0 22px;margin:0}.vp-filter-group summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:15px;font-weight:600;letter-spacing:.04em;padding:5px 0 13px}.vp-filter-group summary::-webkit-details-marker{display:none}.vp-filter-group summary:after{content:'⌃';font-size:16px}.vp-filter-group:not([open]) summary:after{content:'⌄'}.vp-filter-check{display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:14px;padding:6px 0;cursor:pointer}.vp-filter-check input{width:17px;height:17px;accent-color:#26211f;cursor:pointer}.vp-filter-check:has(input:disabled){color:#aaa;cursor:not-allowed}.vp-color-grid{display:flex;flex-wrap:wrap;gap:10px;padding:4px 0}.vp-color-choice{display:inline-flex;position:relative;cursor:pointer}.vp-color-choice input{position:absolute;width:1px;height:1px;opacity:0}.vp-color-choice span{display:block;width:29px;height:29px;background:var(--swatch);border:3px solid white;border-radius:50%;box-shadow:0 0 0 1px #c9c9c9}.vp-color-choice input:checked+span{box-shadow:0 0 0 2px #251f1d}.vp-color-choice input:focus-visible+span{outline:2px solid #70272e;outline-offset:4px}.vp-filter-actions{position:sticky;bottom:0;display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#fff;padding:16px 28px;border-top:1px solid #eee}.vp-filter-actions .vp-btn{width:100%;padding:13px 8px;min-height:46px}.vp-filter-hint{font-size:12px;color:#777;line-height:1.6;margin:4px 0 12px}@media(max-width:520px){.vp-filter-content{padding-left:18px;padding-right:18px}.vp-filter-actions{padding:12px 18px}.vp-filter-group summary{font-size:14px}}
+    .vp-stock{display:flex;flex-wrap:wrap;gap:3px 10px;font-size:12px;margin:7px 0 0}.vp-stock-in{color:#21603d;font-weight:600}.vp-stock-out{color:#912d37;font-weight:600}.vp-search-suggestions{margin-top:20px}.vp-search-suggestions h3{margin:14px 0 8px;font-size:14px}.vp-search-categories{display:flex;flex-wrap:wrap;gap:8px}.vp-search-categories button{background:#fff;border:1px solid #ded7cf;border-radius:16px;color:#362d28;padding:7px 12px;cursor:pointer;text-align:left;font-size:12px}.vp-search-product{width:100%;display:flex;align-items:center;gap:12px;padding:10px 0;background:none;border:0;border-bottom:1px solid #eee8e4;text-align:left;color:#26211f;cursor:pointer}.vp-search-product img{width:44px;height:55px;object-fit:cover;border-radius:4px}.vp-search-product span{min-width:0;overflow-wrap:anywhere}.vp-search-product small{display:block;margin-top:4px;color:#615b56}.vp-search-product:hover,.vp-search-categories button:hover{background:#f3ece5}.vp-filter-form{display:flex;flex-direction:column;min-height:calc(100% - 76px);background:#fff}.vp-filter-content{flex:1;padding:12px 28px 25px}.vp-filter-group{border:0;border-bottom:1px solid #eee8e4;padding:14px 0 22px;margin:0}.vp-filter-group summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:15px;font-weight:600;letter-spacing:.04em;padding:5px 0 13px}.vp-filter-group summary::-webkit-details-marker{display:none}.vp-filter-group summary:after{content:'⌃';font-size:16px}.vp-filter-group:not([open]) summary:after{content:'⌄'}.vp-filter-check{display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:14px;padding:6px 0;cursor:pointer}.vp-filter-check input{width:17px;height:17px;accent-color:#26211f;cursor:pointer}.vp-filter-check:has(input:disabled){color:#aaa;cursor:not-allowed}.vp-color-grid{display:flex;flex-wrap:wrap;gap:10px;padding:4px 0}.vp-color-choice{display:inline-flex;position:relative;cursor:pointer}.vp-color-choice input{position:absolute;width:1px;height:1px;opacity:0}.vp-color-choice span{display:block;width:29px;height:29px;background:var(--swatch);border:3px solid white;border-radius:50%;box-shadow:0 0 0 1px #c9c9c9}.vp-color-choice input:checked+span{box-shadow:0 0 0 2px #251f1d}.vp-color-choice input:focus-visible+span{outline:2px solid #70272e;outline-offset:4px}.vp-filter-actions{position:sticky;bottom:0;display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#fff;padding:16px 28px;border-top:1px solid #eee}.vp-filter-actions .vp-btn{width:100%;padding:13px 8px;min-height:46px}.vp-filter-hint{font-size:12px;color:#777;line-height:1.6;margin:4px 0 12px}@media(max-width:520px){.vp-filter-content{padding-left:18px;padding-right:18px}.vp-filter-actions{padding:12px 18px}.vp-filter-group summary{font-size:14px}}
   `;
   const policyCss=`
-    .vp-search-suggestions{margin-top:24px}
-    .vp-search-suggestions h3{margin:16px 0 8px;font-size:15px}
-    .vp-search-categories{display:flex;flex-wrap:wrap;gap:8px}
-    .vp-search-categories button{background:#fff;border:1px solid #ded7cf;border-radius:16px;color:#362d28;padding:7px 12px;cursor:pointer;text-align:left}
-    .vp-search-product{width:100%;display:flex;align-items:center;gap:12px;padding:10px 0;background:none;border:0;border-bottom:1px solid #eee8e4;text-align:left;color:#26211f;cursor:pointer}
-    .vp-search-product img{width:44px;height:55px;object-fit:cover;border-radius:4px}
-    .vp-search-product span{min-width:0;overflow-wrap:anywhere}
-    .vp-search-product small{display:block;margin-top:4px;color:#615b56}
-    .vp-search-product:hover,.vp-search-categories button:hover{background:#f3ece5}
     .vp-disc-tag{display:inline-block;background:#f4e8e6;color:#762F38;font-size:10px;font-weight:700;padding:2px 6px;margin-left:4px;vertical-align:middle}
     .vp-policy-overlay{position:fixed;inset:0;z-index:10000;background:rgba(26,24,21,.52);display:flex;justify-content:flex-end;align-items:stretch;opacity:0;transition:opacity .24s ease}
     .vp-policy-overlay.open{opacity:1}
@@ -276,6 +267,23 @@
     modal('Bộ lọc sản phẩm',`<form class="vp-filter-form" data-form="filters"><div class="vp-filter-content"><p class="vp-filter-hint">Chọn một hoặc nhiều giá trị trong mỗi nhóm.</p><details class="vp-filter-group" open><summary>KÍCH THƯỚC</summary>${sizeRows}</details><details class="vp-filter-group" open><summary>MÀU SẮC</summary><div class="vp-color-grid">${colorRows}</div></details><details class="vp-filter-group" open><summary>KHOẢNG GIÁ</summary>${priceRows}</details></div><div class="vp-filter-actions"><button type="button" class="vp-btn secondary" data-action="filter-reset">XÓA BỘ LỌC</button><button type="submit" class="vp-btn">XEM KẾT QUẢ</button></div></form>`);
     document.querySelector('.vp-overlay .vp-close')?.focus();
   }
+  function detail(id){let p=find(id);if(!p)return;selectedProduct=id;const cols=colorsFor(p);selectedColor=cols[0]||p.color||'';const szs=sizesFor(p,selectedColor);selectedSize=szs.includes('M')?'M':szs[0];selectedQty=1;renderDetail();}
+  function renderDetail(){
+    const p=find(selectedProduct);if(!p)return;
+    const cols=colorsFor(p);if(!cols.includes(selectedColor))selectedColor=cols[0]||p.color||'';
+    const szs=sizesFor(p,selectedColor);if(!szs.includes(selectedSize))selectedSize=szs[0];
+    const v=variantFor(p.id,selectedSize,selectedColor);
+    const stockAvail=available(p.id,selectedSize,selectedColor);
+    const inCart=quantityInCart(p.id,selectedSize,selectedColor);
+    const remaining=Math.max(0,stockAvail-inCart);
+    if(selectedQty>remaining&&remaining>0)selectedQty=remaining;
+    if(selectedQty<1)selectedQty=1;
+    const price=unitPriceFor(p,v);
+    const hasDisc=p.old&&p.old>price;
+    const discPct=hasDisc?Math.round((p.old-price)/p.old*100):0;
+    const colorButtons=cols.length>1?`<p><b>Màu sắc:</b> ${esc(selectedColor)}</p><div class="vp-size">${cols.map(c=>`<button class="${c===selectedColor?'active':''}" data-action="detail-color" data-color="${esc(c)}">${esc(c)}</button>`).join('')}</div>`:`<p><b>Màu sắc:</b> ${esc(selectedColor)}<br><b>Chất liệu:</b> ${esc(p.material)}</p>`;
+    modal('Chi tiết sản phẩm',`<div class="vp-detail"><img src="${esc(p.img)}" alt="${esc(p.name)}"><div class="vp-detail-info"><div class="vp-muted">${esc(p.category)} / VIỆT PHỤC</div><h3>${esc(p.name)}</h3><div class="vp-detail-price">${money(price)} ${hasDisc?`<del style="font-size:15px;color:#999;font-weight:400;margin-left:6px">${money(p.old)}</del> <span class="vp-disc-tag">Giảm ${money(p.old-price)} (-${discPct}%)</span>`:''}</div><p>${esc(p.description||'Một thiết kế mang nét đẹp truyền thống vào những khoảnh khắc đáng nhớ.')}</p><div class="vp-line"></div>${colorButtons}${cols.length>1?`<p><b>Chất liệu:</b> ${esc(p.material)}</p>`:''}<p><b>Kích thước:</b> ${esc(selectedSize)}${v?.sku?` · <small class="vp-muted">SKU: ${esc(v.sku)}</small>`:''}</p><div class="vp-size">${szs.map(s=>`<button class="${s===selectedSize?'active':''}" data-action="size" data-size="${esc(s)}">${esc(s)}</button>`).join('')}</div><div class="vp-row" style="margin:12px 0"><span><b>Số lượng</b></span><div class="vp-qty"><button type="button" data-action="detail-qty" data-delta="-1">−</button><span style="padding:0 12px">${selectedQty}</span><button type="button" data-action="detail-qty" data-delta="1">+</button></div></div><p class="vp-muted">Còn ${stockAvail} sản phẩm ở phân loại này${inCart?` (trong giỏ: ${inCart} · có thể thêm: ${remaining})`:''}.${p.category==='Phụ kiện'?' Kích thước dùng chung.':' Bảng size tham khảo: S 40–47 kg · M 48–54 kg · L 55–61 kg · XL 62–68 kg.'}</p><button class="vp-btn vp-full" data-action="add" ${remaining<1?'disabled':''}>THÊM VÀO GIỎ HÀNG — ${money(price*selectedQty)}</button><button class="vp-btn secondary vp-full" data-action="buy" ${remaining<1?'disabled':''}>MUA NGAY</button><div class="vp-note">Giặt nhẹ bằng tay, tránh ngâm lâu và phơi dưới nắng gắt. Đổi size/mẫu trong <b>7 ngày</b> từ khi nhận hàng · Hỗ trợ lỗi may sẵn trong <b>30 ngày</b>.<div class="vp-policy-links"><button type="button" class="vp-link" data-action="policy" data-policy="returns">Chính sách đổi trả</button><button type="button" class="vp-link" data-action="policy" data-policy="warranty">Hỗ trợ chất lượng</button><button type="button" class="vp-link" data-action="policy" data-policy="size">Bảng size</button><button type="button" class="vp-link" data-action="policy" data-policy="pricing">Chính sách giá</button></div></div></div></div>`,true);
+  }
   const productPage = document.getElementById('product-page');
   const homePage = document.getElementById('home');
   const homeTitle = document.title;
@@ -285,7 +293,7 @@
   function navigateToProduct(id) {
     const hash = '#/product/' + encodeURIComponent(id);
     if (location.hash === hash) return;
-    if (!homePage.hidden) {
+    if (homePage && !homePage.hidden) {
       history.replaceState({...history.state, catalogScroll: window.scrollY}, '');
     }
     history.pushState(null, '', hash);
@@ -316,9 +324,9 @@
     if (!sizes.includes(selectedSize)) selectedSize = sizes[0];
     const variant = variantFor(p.id, selectedSize, selectedColor);
     const stock = available(p.id, selectedSize, selectedColor);
-    const price = unitPriceFor(p, variant);
     const inCart = quantityInCart(p.id, selectedSize, selectedColor);
     const remaining = Math.max(0, stock - inCart);
+    const price = unitPriceFor(p, variant);
     selectedQty = Math.min(selectedQty, Math.max(1, remaining));
     const summary = productPage.querySelector('.product-summary');
     const focused = summary.contains(document.activeElement) ? document.activeElement : null;
@@ -331,7 +339,7 @@
       <p class="product-price">${money(price)} ${p.old > price ? `<del>${money(p.old)}</del>` : ''}</p>
       <fieldset><legend>Màu sắc</legend>${choices(colorsFor(p), 'color', selectedColor, 'detail-color')}</fieldset>
       <fieldset><legend>Kích thước</legend>${choices(sizes, 'size', selectedSize, 'size')}</fieldset>
-      <p class="product-stock">Còn ${stock} sản phẩm${inCart ? ` · Trong giỏ: ${inCart}` : ''}${variant?.sku ? ' · SKU ' + esc(variant.sku) : ''}</p>
+      <p class="product-stock">Còn ${stock} sản phẩm${inCart ? ` (trong giỏ: ${inCart} · có thể thêm: ${remaining})` : ''}${variant?.sku ? ' · SKU ' + esc(variant.sku) : ''}</p>
       <div class="product-quantity"><strong>Số lượng</strong>
         <button data-action="detail-qty" data-delta="-1" aria-label="Giảm số lượng" ${selectedQty <= 1 ? 'disabled' : ''}>−</button>
         <output>${selectedQty}</output>
@@ -1002,10 +1010,10 @@
   }
   function adminOrder(id){const o=state.orders.find(x=>x.id===id);if(!o)return;modal('Xử lý '+o.id,`<div class="vp-body">${orderCard(o,true,true)}${o.cancellation ? cancellationSection(o,true) : ''}${supportSection(o,true)}<div class="vp-line"></div><p><b>Cập nhật đơn & vận chuyển</b></p><div class="vp-inline-actions">${o.status==='Chờ xác nhận'?`<button class="vp-btn" data-action="order-step" data-id="${id}" data-step="confirm">Xác nhận đơn</button>`:''}${o.status==='Đã xác nhận'&&!cancellationPending(o)?`<button class="vp-btn" data-action="order-step" data-id="${id}" data-step="ship">Bàn giao vận chuyển</button>`:''}${o.status==='Đang giao'?`<button class="vp-btn" data-action="order-step" data-id="${id}" data-step="delivered">Giao thành công</button><button class="vp-btn secondary" data-action="order-step" data-id="${id}" data-step="failed">Giao thất bại</button>`:''}</div>${o.returnStatus&&o.returnStatus!=='Đã hoàn tất'?`<div class="vp-line"></div>${returnSummary(o)}${o.status==='Đã giao'?`<button class="vp-btn" data-action="complete-return" data-id="${id}">${o.returnExchange?'XÁC NHẬN ĐÃ ĐỔI SIZE':'XÁC NHẬN HOÀN TẤT VÀ NHẬP LẠI HÀNG'}</button>`:'<p>Yêu cầu đang chờ xử lý. Chỉ nhập lại hàng sau khi đơn đã giao và nhận lại sản phẩm.</p>'}`:''}${o.status==='Đã giao'&&o.payment==='COD'?`<div class="vp-line"></div><p>Đối soát COD: ${esc(o.settlement||'Chưa đối soát')}</p><button class="vp-btn secondary" data-action="settle" data-id="${id}">GHI NHẬN ĐÃ THỰC NHẬN</button>`:''}<button class="vp-btn secondary vp-full" data-action="admin-tab" data-tab="orders">QUAY LẠI DANH SÁCH</button></div>`);}
   function showContactInfo() {
-    const shortcuts = document.querySelector('.contact-shortcuts');
-    const socialLinks = Array.from(shortcuts.querySelectorAll('[data-social]'), link => link.outerHTML).join('');
-    const email = shortcuts.querySelector('a[href^="mailto:"]');
-    const hotline = shortcuts.querySelector('a[href^="tel:"]');
+    const info = publicPolicies?.storeInfo || {};
+    const phone = info.phone || 'Chưa cập nhật';
+    const email = info.email || 'Chưa cập nhật';
+    const hours = info.supportHours || 'Thứ 2 – Thứ 7, 08:00 – 17:00';
     modal('LIÊN HỆ VỚI CHÚNG TÔI', `<div class="vp-body contact-details">
       <section class="contact-card">
         <h3>VIỆT PHỤC</h3>
@@ -1014,26 +1022,14 @@
       </section>
       <section class="contact-card">
         <h3>THÔNG TIN LIÊN HỆ</h3>
-        <dl><dt>Hotline</dt><dd><a href="${hotline.href}">0901 234 567</a></dd>
-          <dt>Email</dt><dd><a href="${email.href}">support@vietphuc.vn</a></dd>
-          <dt>Địa chỉ</dt><dd>Buôn Ma Thuột, Đắk Lắk</dd>
-          <dt>Thời gian làm việc</dt><dd>Thứ 2 - Thứ 7, 08:00 - 17:00</dd></dl>
-      </section>
-      <section class="contact-card"><h3>KÊNH MẠNG XÃ HỘI</h3>
-        <div class="contact-grid">${socialLinks}</div>
+        <dl><dt>Hotline</dt><dd>${info.phone ? `<a href="tel:${esc(info.phone)}">${esc(phone)}</a>` : esc(phone)}</dd>
+          <dt>Email</dt><dd>${info.email ? `<a href="mailto:${esc(info.email)}">${esc(email)}</a>` : esc(email)}</dd>
+          <dt>Thời gian làm việc</dt><dd>${esc(hours)}</dd></dl>
       </section>
       <section class="contact-card"><h3>HỖ TRỢ KHÁCH HÀNG</h3>
         <ul><li>Tư vấn sản phẩm</li><li>Hướng dẫn chọn size</li><li>Kiểm tra đơn hàng</li>
           <li>Thanh toán đơn hàng</li><li>Đổi trả và hoàn tiền</li><li>Hỗ trợ khiếu nại</li>
           <li>Tư vấn sử dụng và bảo quản sản phẩm</li></ul>
-      </section>
-      <section class="contact-card"><h3>GỬI PHẢN HỒI NHANH</h3>
-        <form class="contact-form" data-form="contact-feedback">
-          <label>Họ và tên<input name="name" autocomplete="name" required></label>
-          <label>Email<input name="email" type="email" autocomplete="email" required></label>
-          <label>Nội dung<textarea name="message" rows="4" required></textarea></label>
-          <button type="submit" class="vp-btn">GỬI PHẢN HỒI</button>
-        </form>
       </section>
     </div>`);
     document.querySelector('.vp-overlay .vp-close')?.focus();
@@ -1046,17 +1042,26 @@
     }
     if(action==='filter-reset'){el.closest('form')?.querySelectorAll('input[type="checkbox"]').forEach(input=>{input.checked=false;});return;}
     if(action==='mobile-menu'){const nav=document.querySelector('.main-nav');if(nav){nav.classList.toggle('open');el.setAttribute('aria-expanded',String(nav.classList.contains('open')));}return;} if(action==='close'){close();return;} if(action==='product'){
-      if (el.tagName === 'A' && (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey)) return;
-      e.preventDefault();
-      if (document.querySelector('.vp-overlay')) close();
-      navigateToProduct(el.dataset.id);
+      if(productPage){
+        if(el.tagName==='A'&&(e.ctrlKey||e.metaKey||e.shiftKey||e.altKey))return;
+        e.preventDefault();
+        if(document.querySelector('.vp-overlay'))close();
+        navigateToProduct(el.dataset.id);
+        return;
+      }
+      detail(el.dataset.id);return;
+    }
+    if(action==='product-photo'){
+      if(productPage){
+        productPage.querySelector('.product-main-image').src=el.querySelector('img').src;
+        productPage.querySelectorAll('[data-action="product-photo"]').forEach(btn=>btn.setAttribute('aria-pressed',String(btn===el)));
+      }
       return;
     }
-    if (action === 'product-photo') {
-      productPage.querySelector('.product-main-image').src = el.querySelector('img').src;
-      productPage.querySelectorAll('[data-action="product-photo"]').forEach(btn => btn.setAttribute('aria-pressed', String(btn === el)));
-      return;
-    } if(action==='detail-color'){selectedColor=el.dataset.color;selectedQty=1;renderProductSummary();return;} if(action==='size'){selectedSize=el.dataset.size;selectedQty=1;renderProductSummary();return;} if(action==='detail-qty'){const maxQ=Math.max(1,available(selectedProduct,selectedSize,selectedColor)-quantityInCart(selectedProduct,selectedSize,selectedColor));selectedQty=Math.max(1,Math.min(maxQ,selectedQty+(+el.dataset.delta)));renderProductSummary();return;} if(action==='add'){if(await add()){toast('Đã thêm sản phẩm vào giỏ hàng.');cart();}return;} if(action==='buy'){if(await add())checkout();return;}
+    if(action==='detail-color'){selectedColor=el.dataset.color;selectedQty=1;if(productPage&&!productPage.hidden)renderProductSummary();else renderDetail();return;}
+    if(action==='size'){selectedSize=el.dataset.size;selectedQty=1;if(productPage&&!productPage.hidden)renderProductSummary();else renderDetail();return;}
+    if(action==='detail-qty'){const maxQ=Math.max(1,available(selectedProduct,selectedSize,selectedColor)-quantityInCart(selectedProduct,selectedSize,selectedColor));selectedQty=Math.max(1,Math.min(maxQ,selectedQty+(+el.dataset.delta)));if(productPage&&!productPage.hidden)renderProductSummary();else renderDetail();return;}
+    if(action==='add'){if(await add()){toast('Đã thêm sản phẩm vào giỏ hàng.');cart();}return;} if(action==='buy'){if(await add())checkout();return;}
     if(action==='open-cart'){cart();return;}if(action==='open-account'){account(state.user?'profile':'login');return;}if(action==='open-admin'){window.location.href='admin.html';return;}if(action==='policy'){e.preventDefault();openPolicyCenter(el.dataset.policy||'pricing');return;}if(action==='close-policy'){closePolicyDrawer();return;}if(action==='open-return-form'){openCustomerReturnForm(el.dataset.id);return;}if(action==='open-orders'){if(serverMode){if(state.user)account('orders');else{toast('Vui lòng đăng nhập để xem đơn hàng.');account('login');}return;}try{await refreshDatabase();state.user?orders():account();}catch(err){toast(err.message);}return;}
     if(action==='customer-tab'){account(el.dataset.tab);return;}
     if(action==='customer-order-detail'){loadCustomerOrderDetail(el.dataset.id);return;}
