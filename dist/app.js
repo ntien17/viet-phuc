@@ -48,12 +48,10 @@
     const hrsEl=document.getElementById('footer-store-hours');
     const fEmail=document.getElementById('footer-contact-email');
     const fPhone=document.getElementById('footer-contact-phone');
-    const fHours=document.getElementById('footer-contact-hours');
     if(regEl&&publicPolicies?.storeInfo?.region)regEl.textContent=publicPolicies.storeInfo.region;
     if(hrsEl&&publicPolicies?.storeInfo?.hours)hrsEl.textContent=publicPolicies.storeInfo.hours;
     if(fEmail&&publicPolicies?.storeInfo?.email)fEmail.textContent=publicPolicies.storeInfo.email;
     if(fPhone&&publicPolicies?.storeInfo?.hotline)fPhone.textContent=publicPolicies.storeInfo.hotline;
-    if(fHours&&publicPolicies?.storeInfo?.hours)fHours.textContent=publicPolicies.storeInfo.hours;
     if(Array.isArray(data.products)){
       const mapped=data.products.map(p=>mapPublicProduct(p,catMap));
       products.splice(0,products.length,...mapped);
@@ -190,11 +188,13 @@
   }
   function showSearchResults(query,selectedCategory='Tất cả'){
     search=String(query||'').trim();category=selectedCategory;filters={sizes:[],colors:[],prices:[]};close();renderProducts();
-    if(productPage&&!productPage.hidden)location.hash='san-pham';
+    if(productPage && !productPage.hidden) location.hash='san-pham';
     else document.getElementById('product-grid')?.scrollIntoView({behavior:'smooth',block:'start'});
   }
-  function updateCount(){document.querySelectorAll('#cart-count,[data-cart-count]').forEach(x=>x.textContent=cartCount());}
-
+  function updateCount(){
+    document.querySelectorAll('#cart-count,[data-cart-count]').forEach(x=>x.textContent=cartCount());
+    if(selectedProduct && productPage && !productPage.hidden && find(selectedProduct)) renderProductSummary();
+  }
   function renderProducts(){
     const grid=document.getElementById('product-grid'); if(!grid) return;
     const query=normalizeSearch(search);
