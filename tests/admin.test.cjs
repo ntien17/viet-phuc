@@ -227,6 +227,15 @@ async function main() {
   assert.equal((await request('POST', '/api/admin/logout', undefined, { Cookie: adminCookie2 })).status, 200);
   assert.equal((await request('GET', '/api/admin/session', undefined, { Cookie: adminCookie2 })).body.loggedIn, false);
   console.log('PASS admin logout terminates session');
+
+  // 9. Kiểm tra bộ lọc Đang đóng gói & Chờ thanh toán trong admin.html và admin.js
+  const adminHtml = fs.readFileSync(path.join(root, 'dist', 'admin.html'), 'utf8');
+  assert.match(adminHtml, /<option value="Đang đóng gói">/);
+  assert.match(adminHtml, /<option value="Chờ thanh toán">/);
+  const adminJs = fs.readFileSync(path.join(root, 'dist', 'admin.js'), 'utf8');
+  assert.match(adminJs, /packing:\s*'Đang đóng gói'/);
+  assert.match(adminJs, /pending:\s*'Chờ thanh toán'/);
+  console.log('PASS admin order filter options include packing and pending payment');
 }
 
 main().catch(err => { console.error('FAIL', err); process.exitCode = 1; }).finally(async () => {

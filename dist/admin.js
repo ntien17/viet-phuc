@@ -786,7 +786,7 @@
 
     container.innerHTML = `
       <div class="admin-modal-overlay" data-action="close-order-detail">
-        <aside class="admin-drawer" role="dialog" aria-modal="true" aria-label="Chi tiết đơn hàng ${esc(o.id)}" onclick="event.stopPropagation()">
+        <aside class="admin-drawer" role="dialog" aria-modal="true" aria-label="Chi tiết đơn hàng ${esc(o.id)}">
           <header class="drawer-header">
             <div>
               <h3>Đơn hàng ${esc(o.id)}</h3>
@@ -1315,6 +1315,7 @@
       }
 
       if (action === 'close-order-detail') {
+        if (el.classList.contains('drawer-backdrop') && e.target !== el) return;
         closeOrderDetail();
         return;
       }
