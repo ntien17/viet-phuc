@@ -1,11 +1,455 @@
-[
-  {"id":"p1","name":"Áo dài An Nhiên","category":"Áo dài truyền thống","price":1250000,"old":1450000,"color":"Đỏ trầm","material":"Lụa mềm","tag":"BÁN CHẠY","img":"assets/ao-dai-do.png","addedAt":"2026-01-10"},
-  {"id":"p2","name":"Áo dài Bạch Liên","category":"Áo dài truyền thống","price":890000,"color":"Trắng ngà","material":"Lụa tổng hợp","tag":"MỚI","img":"assets/ao-dai-trang.png","addedAt":"2026-03-14"},
-  {"id":"p3","name":"Bộ tứ thân Kinh Bắc","category":"Áo tứ thân","price":1150000,"color":"Nâu đất","material":"Cotton pha","tag":"ĐƯỢC YÊU THÍCH","img":"assets/ao-tu-than.png","addedAt":"2026-02-02"},
-  {"id":"p4","name":"Áo bà ba Hương Sen","category":"Áo bà ba","price":690000,"color":"Hồng sen","material":"Cotton mềm","tag":"MỚI","img":"assets/ao-ba-ba.png","addedAt":"2026-04-05"},
-  {"id":"p5","name":"Bộ tứ thân Thương Nhớ","category":"Áo tứ thân","price":1290000,"color":"Đen","material":"Cotton pha","tag":"DI SẢN VIỆT","img":"assets/ao-tu-than.png","addedAt":"2026-01-21"},
-  {"id":"p6","name":"Áo bà ba Mộc Miên","category":"Áo bà ba","price":590000,"color":"Hồng phấn","material":"Cotton mềm","tag":"BÁN CHẠY","img":"assets/ao-ba-ba.png","addedAt":"2026-02-25"},
-  {"id":"p7","name":"Bộ Việt phục Đồng Quê","category":"Áo tứ thân","price":990000,"color":"Nâu đất","material":"Cotton pha","tag":"MỚI","img":"assets/ao-tu-than.png","addedAt":"2026-05-12"},
-  {"id":"p8","name":"Áo dài cách tân Lụa Mộc","category":"Áo dài cách tân","price":790000,"color":"Xanh nhạt","material":"Lụa tổng hợp","tag":"MỚI","img":"assets/ao-dai-xanh.png","addedAt":"2026-06-08"},
-  {"id":"p9","name":"Mấn gấm đỏ truyền thống","category":"Phụ kiện","price":320000,"color":"Đỏ trầm","material":"Gấm","tag":"MỚI","img":"assets/accessory.png","sizes":["One Size"],"addedAt":"2026-07-01"}
-]
+{
+  "categories": [
+    {
+      "id": "cat1",
+      "name": "Áo dài truyền thống",
+      "active": true,
+      "sortOrder": 1
+    },
+    {
+      "id": "cat2",
+      "name": "Áo dài cách tân",
+      "active": true,
+      "sortOrder": 2
+    },
+    {
+      "id": "cat3",
+      "name": "Áo bà ba",
+      "active": true,
+      "sortOrder": 3
+    },
+    {
+      "id": "cat4",
+      "name": "Áo tứ thân",
+      "active": true,
+      "sortOrder": 4
+    },
+    {
+      "id": "cat5",
+      "name": "Phụ kiện",
+      "active": true,
+      "sortOrder": 5
+    }
+  ],
+  "products": [
+    {
+      "id": "p1",
+      "categoryId": "cat1",
+      "name": "Áo dài An Nhiên",
+      "description": "Thiết kế áo dài truyền thống chất liệu lụa mềm rũ nhẹ, giữ phom dáng thanh lịch.",
+      "price": 1250000,
+      "old": 1450000,
+      "material": "Lụa mềm",
+      "tag": "BÁN CHẠY",
+      "img": "assets/ao-dai-do.png",
+      "variants": [
+        {
+          "sku": "VP-P1-DO_TRAM-S",
+          "color": "Đỏ trầm",
+          "size": "S",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P1-DO_TRAM-M",
+          "color": "Đỏ trầm",
+          "size": "M",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P1-DO_TRAM-L",
+          "color": "Đỏ trầm",
+          "size": "L",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P1-DO_TRAM-XL",
+          "color": "Đỏ trầm",
+          "size": "XL",
+          "priceOverride": null,
+          "active": true
+        }
+      ],
+      "active": true,
+      "featured": true,
+      "addedAt": "2026-01-10"
+    },
+    {
+      "id": "p2",
+      "categoryId": "cat1",
+      "name": "Áo dài Bạch Liên",
+      "description": "Áo dài trắng ngà tinh khôi phù hợp các dịp lễ, sự kiện trang trọng.",
+      "price": 890000,
+      "old": null,
+      "material": "Lụa tổng hợp",
+      "tag": "MỚI",
+      "img": "assets/ao-dai-trang.png",
+      "variants": [
+        {
+          "sku": "VP-P2-TRANG_NGA-S",
+          "color": "Trắng ngà",
+          "size": "S",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P2-TRANG_NGA-M",
+          "color": "Trắng ngà",
+          "size": "M",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P2-TRANG_NGA-L",
+          "color": "Trắng ngà",
+          "size": "L",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P2-TRANG_NGA-XL",
+          "color": "Trắng ngà",
+          "size": "XL",
+          "priceOverride": null,
+          "active": true
+        }
+      ],
+      "active": true,
+      "featured": false,
+      "addedAt": "2026-03-14"
+    },
+    {
+      "id": "p3",
+      "categoryId": "cat4",
+      "name": "Bộ tứ thân Kinh Bắc",
+      "description": "Bộ tứ thân mang âm hưởng truyền thống vùng Kinh Bắc, chất liệu cotton pha thoáng mát.",
+      "price": 1150000,
+      "old": null,
+      "material": "Cotton pha",
+      "tag": "ĐƯỢC YÊU THÍCH",
+      "img": "assets/ao-tu-than.png",
+      "variants": [
+        {
+          "sku": "VP-P3-NAU_DAT-S",
+          "color": "Nâu đất",
+          "size": "S",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P3-NAU_DAT-M",
+          "color": "Nâu đất",
+          "size": "M",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P3-NAU_DAT-L",
+          "color": "Nâu đất",
+          "size": "L",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P3-NAU_DAT-XL",
+          "color": "Nâu đất",
+          "size": "XL",
+          "priceOverride": null,
+          "active": true
+        }
+      ],
+      "active": true,
+      "featured": true,
+      "addedAt": "2026-02-02"
+    },
+    {
+      "id": "p4",
+      "categoryId": "cat3",
+      "name": "Áo bà ba Hương Sen",
+      "description": "Áo bà ba sắc hồng sen dịu dàng, đường may gọn gàng dễ mặc hằng ngày.",
+      "price": 690000,
+      "old": null,
+      "material": "Cotton mềm",
+      "tag": "MỚI",
+      "img": "assets/ao-ba-ba.png",
+      "variants": [
+        {
+          "sku": "VP-P4-HONG_SEN-S",
+          "color": "Hồng sen",
+          "size": "S",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P4-HONG_SEN-M",
+          "color": "Hồng sen",
+          "size": "M",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P4-HONG_SEN-L",
+          "color": "Hồng sen",
+          "size": "L",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P4-HONG_SEN-XL",
+          "color": "Hồng sen",
+          "size": "XL",
+          "priceOverride": null,
+          "active": true
+        }
+      ],
+      "active": true,
+      "featured": false,
+      "addedAt": "2026-04-05"
+    },
+    {
+      "id": "p5",
+      "categoryId": "cat4",
+      "name": "Bộ tứ thân Thương Nhớ",
+      "description": "Bộ tứ thân tông đen cổ điển, tôn nét duyên dáng truyền thống.",
+      "price": 1290000,
+      "old": null,
+      "material": "Cotton pha",
+      "tag": "DI SẢN VIỆT",
+      "img": "assets/ao-tu-than.png",
+      "variants": [
+        {
+          "sku": "VP-P5-BLACK-S",
+          "color": "Đen",
+          "size": "S",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P5-BLACK-M",
+          "color": "Đen",
+          "size": "M",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P5-BLACK-L",
+          "color": "Đen",
+          "size": "L",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P5-BLACK-XL",
+          "color": "Đen",
+          "size": "XL",
+          "priceOverride": null,
+          "active": true
+        }
+      ],
+      "active": true,
+      "featured": true,
+      "addedAt": "2026-01-21"
+    },
+    {
+      "id": "p6",
+      "categoryId": "cat3",
+      "name": "Áo bà ba Mộc Miên",
+      "description": "Áo bà ba hồng phấn nhẹ nhàng, chất cotton mềm thấm hút tốt.",
+      "price": 590000,
+      "old": null,
+      "material": "Cotton mềm",
+      "tag": "BÁN CHẠY",
+      "img": "assets/ao-ba-ba.png",
+      "variants": [
+        {
+          "sku": "VP-P6-HONG_PHAN-S",
+          "color": "Hồng phấn",
+          "size": "S",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P6-HONG_PHAN-M",
+          "color": "Hồng phấn",
+          "size": "M",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P6-HONG_PHAN-L",
+          "color": "Hồng phấn",
+          "size": "L",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P6-HONG_PHAN-XL",
+          "color": "Hồng phấn",
+          "size": "XL",
+          "priceOverride": null,
+          "active": true
+        }
+      ],
+      "active": true,
+      "featured": false,
+      "addedAt": "2026-02-25"
+    },
+    {
+      "id": "p7",
+      "categoryId": "cat4",
+      "name": "Bộ Việt phục Đồng Quê",
+      "description": "Trang phục lấy cảm hứng từ nét đẹp đồng quê Việt Nam, dễ phối phụ kiện.",
+      "price": 990000,
+      "old": null,
+      "material": "Cotton pha",
+      "tag": "MỚI",
+      "img": "assets/ao-tu-than.png",
+      "variants": [
+        {
+          "sku": "VP-P7-NAU_DAT-S",
+          "color": "Nâu đất",
+          "size": "S",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P7-NAU_DAT-M",
+          "color": "Nâu đất",
+          "size": "M",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P7-NAU_DAT-L",
+          "color": "Nâu đất",
+          "size": "L",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P7-NAU_DAT-XL",
+          "color": "Nâu đất",
+          "size": "XL",
+          "priceOverride": null,
+          "active": true
+        }
+      ],
+      "active": true,
+      "featured": false,
+      "addedAt": "2026-05-12"
+    },
+    {
+      "id": "p8",
+      "categoryId": "cat2",
+      "name": "Áo dài cách tân Lụa Mộc",
+      "description": "Áo dài cách tân dáng trẻ trung, sắc xanh nhạt trang nhã.",
+      "price": 790000,
+      "old": null,
+      "material": "Lụa tổng hợp",
+      "tag": "MỚI",
+      "img": "assets/ao-dai-xanh.png",
+      "variants": [
+        {
+          "sku": "VP-P8-XANH_NHAT-S",
+          "color": "Xanh nhạt",
+          "size": "S",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P8-XANH_NHAT-M",
+          "color": "Xanh nhạt",
+          "size": "M",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P8-XANH_NHAT-L",
+          "color": "Xanh nhạt",
+          "size": "L",
+          "priceOverride": null,
+          "active": true
+        },
+        {
+          "sku": "VP-P8-XANH_NHAT-XL",
+          "color": "Xanh nhạt",
+          "size": "XL",
+          "priceOverride": null,
+          "active": true
+        }
+      ],
+      "active": true,
+      "featured": false,
+      "addedAt": "2026-06-08"
+    },
+    {
+      "id": "p9",
+      "categoryId": "cat5",
+      "name": "Mấn gấm đỏ truyền thống",
+      "description": "Phụ kiện mấn đội đầu chất liệu gấm đỏ trầm, hoàn thiện bộ áo dài.",
+      "price": 320000,
+      "old": null,
+      "material": "Gấm",
+      "tag": "MỚI",
+      "img": "assets/accessory.png",
+      "variants": [
+        {
+          "sku": "VP-P9-DO_TRAM-ONE_SIZE",
+          "color": "Đỏ trầm",
+          "size": "One Size",
+          "priceOverride": null,
+          "active": true
+        }
+      ],
+      "active": true,
+      "featured": false,
+      "addedAt": "2026-07-01"
+    }
+  ],
+  "policies": {
+    "version": 1,
+    "updatedAt": "2026-11-25T00:00:00.000Z",
+    "storeInfo": {
+      "name": "VIỆT PHỤC — Traditional Clothing",
+      "hours": "Thứ 2 – Thứ 7: 08:00 – 17:00 (cấu hình mặc định theo báo cáo, cần xác nhận khi vận hành)",
+      "region": "Phục vụ khách hàng tại Việt Nam",
+      "hotline": "Chưa cấu hình",
+      "email": "Chưa cấu hình",
+      "address": "Chưa cấu hình",
+      "social": "Chưa cấu hình"
+    },
+    "banners": {
+      "heroTitle": "Nét Việt trong từng tà áo",
+      "heroImg": "assets/hero.png",
+      "notice": ""
+    },
+    "visibility": {
+      "pricing": true,
+      "purchase": true,
+      "payment": true,
+      "shipping": true,
+      "returns": true,
+      "warranty": true,
+      "privacy": true,
+      "complaints": true,
+      "rights": true,
+      "orderProcess": true,
+      "size": true
+    },
+    "items": {
+      "pricing": "Nguyên tắc niêm yết giá\nVIỆT PHỤC công khai giá bán của từng sản phẩm trên website nhằm giúp khách hàng dễ dàng lựa chọn và chủ động tính toán chi phí trước khi đặt hàng.\n- Giá sản phẩm được niêm yết bằng Việt Nam đồng (VNĐ).\n- Giá hiển thị trên trang chi tiết sản phẩm là giá bán áp dụng tại thời điểm khách hàng đặt hàng.\n- Đối với sản phẩm đang giảm giá, website hiển thị giá gốc, giá sau giảm và mức giảm tương ứng nếu có.\n- Giá bán được áp dụng thống nhất giữa trang chi tiết sản phẩm, giỏ hàng và bước xác nhận đơn hàng.\n- Mọi thay đổi về giá được cập nhật công khai trên website và không tự ý thay đổi giá của đơn hàng đã được cửa hàng xác nhận.\n\nCác khoản chi phí khi mua hàng\nTổng giá trị đơn hàng được xác định theo công thức:\nTổng thanh toán = Tiền hàng − Giảm giá + Phí vận chuyển.\n- Tiền hàng: Giá niêm yết của từng sản phẩm nhân với số lượng mua.\n- Giảm giá: Khoản giảm theo mã khuyến mãi hoặc chương trình ưu đãi hợp lệ.\n- Phí vận chuyển: Tính theo địa chỉ nhận hàng và chính sách hỗ trợ vận chuyển.\nWebsite phải hiển thị đầy đủ các khoản chi phí trước khi khách hàng xác nhận đặt hàng. Không phát sinh phụ phí ngoài những khoản đã được thông báo và khách hàng chấp thuận.\n\nChính sách khuyến mãi\nCác hình thức ưu đãi có thể bao gồm:\n- Giảm giá trực tiếp trên sản phẩm.\n- Mã giảm giá dành cho khách hàng mới.\n- Mã ưu đãi dành cho khách hàng thân thiết.\n- Miễn hoặc giảm phí vận chuyển đối với đơn hàng đạt giá trị quy định.\n- Chương trình ưu đãi theo dịp lễ, Tết hoặc sự kiện văn hóa truyền thống.\nMỗi chương trình phải công bố rõ thời gian áp dụng, đối tượng được hưởng, giá trị ưu đãi, điều kiện sử dụng và phạm vi sản phẩm áp dụng. Mỗi mã giảm giá chỉ được sử dụng theo điều kiện đã công bố. Website có quyền từ chối mã hết hạn, không hợp lệ hoặc không đáp ứng điều kiện chương trình và cần thông báo lý do.\n\nĐiều kiện sử dụng mã giảm giá\nTrước khi xác nhận đơn, khách hàng cần kiểm tra mã còn hiệu lực, giá trị đơn tối thiểu (nếu chương trình quy định), nhóm khách hàng và sản phẩm được áp dụng. Theo quy tắc hiện tại, mỗi đơn hàng áp dụng tối đa một mã giảm giá. Không cộng dồn mã nếu chương trình không công bố cho phép. Khi mã không hợp lệ, hết hạn hoặc không đáp ứng điều kiện, hệ thống cần nêu lý do để khách hàng có thể điều chỉnh trước khi đặt hàng.",
+      "purchase": "VIỆT PHỤC hỗ trợ khách hàng đặt mua trang phục truyền thống thông qua website.\n\nQuy trình đặt hàng\n- Bước 1: Truy cập website và lựa chọn sản phẩm. Khách hàng lựa chọn danh mục phù hợp như áo dài, áo bà ba, áo tứ thân hoặc phụ kiện.\n- Bước 2: Xem thông tin chi tiết sản phẩm. Khách hàng cần kiểm tra: hình ảnh sản phẩm; tên và mô tả sản phẩm; giá bán và giá khuyến mãi; chất liệu vải; màu sắc và kích thước hiện có; số lượng sản phẩm còn hàng; hướng dẫn lựa chọn và bảo quản sản phẩm.\n- Bước 3: Thêm sản phẩm vào giỏ hàng. Khách hàng chọn kích thước, màu sắc, số lượng và thêm sản phẩm vào giỏ hàng.\n- Bước 4: Cung cấp thông tin nhận hàng. Các thông tin cần thiết: họ và tên người nhận; số điện thoại liên hệ; địa chỉ nhận hàng; email nếu có; ghi chú đơn hàng nếu cần.\n- Bước 5: Lựa chọn phương thức thanh toán và vận chuyển. Khách hàng kiểm tra phí vận chuyển, ưu đãi và tổng số tiền phải thanh toán.\n- Bước 6: Xác nhận đặt hàng. Khách hàng kiểm tra lại toàn bộ thông tin trước khi xác nhận. Hệ thống ghi nhận đơn hàng và hiển thị thông báo xác nhận theo chức năng website đang triển khai.\n- Bước 7: Xử lý và giao hàng. Cửa hàng tiếp nhận đơn hàng, kiểm tra sản phẩm, xác nhận thông tin và thực hiện quy trình giao hàng.\n\nQuy định xác nhận đơn hàng\n- Đơn hàng chỉ được chuyển sang trạng thái đã xác nhận sau khi cửa hàng kiểm tra thông tin và khả năng đáp ứng sản phẩm.\n- Đối với đơn hàng thanh toán trực tuyến, cần kiểm tra trạng thái giao dịch theo cơ chế mô phỏng hiện có.\n- Đối với đơn COD, khách hàng thanh toán khi nhận hàng.\n- Nếu sản phẩm hết hàng, thông tin nhận hàng không hợp lệ hoặc không thể liên hệ khách hàng để xác nhận, cửa hàng có thể tạm giữ hoặc hủy đơn và thông báo lý do.\n- Khách hàng cần kiểm tra lại thông tin trước khi xác nhận đơn hàng.\n\nKiểm tra cuối trước khi gửi đơn\n1. Đối chiếu lại tên sản phẩm, hình ảnh, chất liệu, màu sắc, kích thước, số lượng và tồn kho hiển thị.\n2. Kiểm tra họ tên, số điện thoại, địa chỉ nhận hàng; bổ sung email hoặc ghi chú nếu cần.\n3. Kiểm tra phương thức thanh toán, phí giao hàng, mã ưu đãi và tổng tiền cuối cùng.\n4. Xác nhận đơn sau khi các thông tin đã chính xác. Hệ thống kiểm tra lại giá, tồn kho và khuyến mãi ở phía máy chủ trước khi ghi nhận.\n5. Theo dõi trạng thái đơn trong tài khoản hoặc giao diện website theo chức năng đang có.\nĐơn online chưa thanh toán không được xem là cửa hàng đã nhận tiền. Nếu sản phẩm hết hàng hoặc thông tin không hợp lệ, đơn có thể chưa được xác nhận; cửa hàng cần thông báo tình trạng và lý do cho khách hàng.",
+      "payment": "VIỆT PHỤC hỗ trợ hình thức thanh toán COD và thanh toán trực tuyến mô phỏng trong phạm vi website demo.\n\nThanh toán khi nhận hàng (COD)\nCOD là hình thức khách hàng thanh toán trực tiếp khi nhận sản phẩm.\nQuy trình:\n1. Khách hàng chọn COD khi đặt hàng.\n2. Cửa hàng xác nhận đơn hàng.\n3. Đơn hàng được chuẩn bị và bàn giao cho quy trình giao hàng.\n4. Khách hàng thanh toán số tiền được thông báo khi nhận hàng.\n5. Tiền thu hộ được đối soát theo quy trình giao nhận tương ứng.\nKhách hàng cần chuẩn bị đủ số tiền phải thanh toán. Nếu kiện hàng có dấu hiệu rách, móp, ướt hoặc bị mở bất thường, khách hàng nên ghi nhận tình trạng và liên hệ cửa hàng để được hỗ trợ.\n\nThanh toán trực tuyến mô phỏng\nWebsite hiện tại phục vụ mục đích học tập và trình diễn, vì vậy chức năng thanh toán trực tuyến chỉ mô phỏng trạng thái giao dịch (isSimulated: true).\nQuy trình mô phỏng:\n1. Khách hàng chọn thanh toán trực tuyến.\n2. Website hiển thị giao diện thanh toán mô phỏng (giữ hàng 15 phút).\n3. Khách hàng thực hiện thao tác xác nhận mô phỏng.\n4. Hệ thống ghi nhận kết quả thành công hoặc thất bại theo chức năng demo.\n5. Đơn hàng được cập nhật theo trạng thái giao dịch mô phỏng.\nLưu ý quan trọng:\n- Giao dịch mô phỏng không phải giao dịch ngân hàng thật.\n- Không khẳng định cửa hàng đã nhận được tiền thật khi hệ thống chỉ ghi nhận thanh toán mô phỏng.\n- Không tự tạo thông tin tài khoản ngân hàng, mã QR hoặc thông tin thanh toán thật.\n- Không tuyên bố website đã tích hợp API ngân hàng hoặc cổng thanh toán thực tế.\n\nXử lý giao dịch\n- Thanh toán mô phỏng thành công: cập nhật trạng thái giao dịch tương ứng và tiếp tục quy trình đơn hàng.\n- Thanh toán mô phỏng thất bại: thông báo cho khách hàng và cho phép thực hiện lại nếu đơn hàng còn hiệu lực.\n- Đơn hàng bị hủy nhưng có giao dịch mô phỏng: ghi nhận trạng thái xử lý hoàn tiền mô phỏng nếu chức năng hiện có hỗ trợ.\n- Các trường hợp thanh toán thiếu, thừa hoặc trùng chỉ được mô tả là quy trình đối soát tham khảo, không giả lập việc nhận tiền thật.\n\nPhạm vi phương thức thanh toán\nBáo cáo đề cập chuyển khoản qua mã QR và tích hợp cổng thanh toán như phương án có thể phát triển. Website hiện tại sử dụng thanh toán trực tuyến mô phỏng; chưa xác nhận tài khoản ngân hàng, mã QR, API ngân hàng hoặc cổng thanh toán thật. Vì vậy, khách hàng chỉ thực hiện theo phương thức đang hiển thị trên website và không chuyển tiền theo thông tin mẫu hoặc placeholder trong tài liệu.\n\nĐối soát COD\nĐơn COD là khoản dự kiến thu hộ khi giao hàng. Cửa hàng đối chiếu mã đơn, tổng phải thu, trạng thái giao và số tiền thu hộ theo dữ liệu giao nhận. Chỉ ghi nhận tiền thực nhận khi có xác nhận thực tế; trạng thái mô phỏng không đồng nghĩa tiền đã vào tài khoản cửa hàng.",
+      "shipping": "VIỆT PHỤC định hướng hỗ trợ giao hàng đến các tỉnh, thành phố trên toàn quốc, tùy thuộc phạm vi hoạt động của đơn vị vận chuyển.\n\nPhạm vi giao hàng\n- Nhận hàng tại địa chỉ đã đăng ký khi đặt hàng.\n- Nhận hàng tại điểm giao nhận hoặc bưu cục nếu đơn vị vận chuyển hỗ trợ.\n- Khu vực vùng sâu, vùng xa hoặc hải đảo có thể có thời gian giao lâu hơn dự kiến.\n\nThời gian giao hàng dự kiến\n- Nội thành Đắk Lắk: 1–2 ngày làm việc.\n- Các khu vực khác trong tỉnh Đắk Lắk: 2–3 ngày làm việc.\n- Các tỉnh, thành phố lớn: 2–4 ngày làm việc.\n- Vùng sâu, vùng xa, hải đảo: 4–7 ngày làm việc hoặc lâu hơn.\nThời gian được tính từ khi đơn hàng được xác nhận và bàn giao cho đơn vị vận chuyển. Đây là thời gian dự kiến, không phải cam kết tuyệt đối. Thời gian có thể thay đổi do thời tiết, ngày lễ, Tết, giao thông hoặc tình trạng quá tải vận chuyển. Khi có chậm trễ đáng kể, cửa hàng cần thông báo và cập nhật tình trạng đơn hàng.\n\nPhí vận chuyển\nPhí vận chuyển phụ thuộc:\n- Địa chỉ nhận hàng.\n- Khối lượng và kích thước kiện hàng.\n- Đơn vị vận chuyển.\n- Chương trình ưu đãi tại thời điểm đặt hàng.\nPhí vận chuyển cần được hiển thị trước khi khách hàng xác nhận đơn hàng. (Bản demo hiện cấu hình phí mô phỏng: tiêu chuẩn 30.000₫, khu vực xa/hải đảo 45.000₫.)\n\nQuy trình đóng gói và giao hàng\n1. Kiểm tra mã đơn hàng và thông tin sản phẩm.\n2. Kiểm tra số lượng, kích thước, màu sắc và tình trạng sản phẩm.\n3. Gấp và đóng gói trang phục phù hợp để hạn chế nhăn, bẩn hoặc ẩm ướt.\n4. Đóng gói phụ kiện riêng nếu cần.\n5. Dán thông tin người nhận và mã vận đơn khi có.\n6. Bàn giao kiện hàng cho đơn vị vận chuyển.\n7. Cập nhật mã vận đơn và trạng thái giao hàng nếu chức năng hỗ trợ.\n\nTheo dõi đơn hàng & Xử lý vấn đề giao hàng\nCác trạng thái tham khảo: Chờ xác nhận · Đã xác nhận · Đang chuẩn bị hàng · Đang giao hàng · Giao hàng thành công · Giao hàng thất bại · Đã hủy.\n- Sai địa chỉ hoặc số điện thoại: liên hệ khách hàng để xác minh và điều chỉnh nếu còn khả năng.\n- Không liên hệ được người nhận: phối hợp xử lý theo quy định của đơn vị vận chuyển.\n- Giao hàng chậm: kiểm tra tình trạng và thông báo thời gian dự kiến mới.\n- Hàng thất lạc: phối hợp xác minh với đơn vị vận chuyển.\n- Hàng hư hỏng trong quá trình vận chuyển: tiếp nhận hình ảnh hoặc video để kiểm tra và đưa ra phương án hỗ trợ.\n- Khách muốn hủy khi hàng đang giao: kiểm tra trạng thái vận chuyển và thông báo phương án phù hợp.\nCửa hàng là đầu mối tiếp nhận và phối hợp giải quyết vấn đề phát sinh liên quan đến sản phẩm trong quá trình giao nhận.\n\nTheo dõi và xử lý giao nhận\nCác trạng thái cần hiểu riêng: Chờ xác nhận là cửa hàng đang kiểm tra đơn; Đã xác nhận là đơn được chấp nhận xử lý; Đang chuẩn bị hàng là sản phẩm được kiểm tra và đóng gói; Đang giao hàng là kiện hàng đã bàn giao; Giao thành công là khách đã nhận; Giao thất bại là lần giao chưa hoàn tất; Đã hủy hoặc Hoàn hàng thể hiện đơn không tiếp tục giao đến khách. Trạng thái thực tế phụ thuộc dữ liệu vận hành được ghi nhận trên website.\n\nKhi phát sinh sự cố\n- Sai địa chỉ hoặc số điện thoại: xác minh với khách trước khi giao nếu đơn chưa hoàn tất.\n- Không liên hệ được người nhận: cập nhật tình trạng và phương án giao lại/hoàn hàng theo quy trình giao nhận thực tế.\n- Giao chậm: kiểm tra tình trạng và thông báo thời gian dự kiến mới; thời gian dự kiến không phải cam kết tuyệt đối.\n- Thất lạc hoặc hư hỏng: cửa hàng tiếp nhận phản ánh, đối chiếu thông tin giao nhận và hình ảnh/video nếu có, rồi thông báo phương án xử lý.\n- Khách muốn hủy khi hàng đang giao: kiểm tra khả năng dừng giao trước khi xác nhận phương án. Cửa hàng tiếp nhận phối hợp xử lý để khách không phải tự liên hệ nhiều bên.",
+      "returns": "VIỆT PHỤC xây dựng chính sách đổi trả nhằm bảo vệ quyền lợi khách hàng và bảo đảm minh bạch trong quá trình xử lý sản phẩm sau bán hàng.\n\nThời hạn đổi hàng\nKhách hàng có thể yêu cầu đổi sản phẩm trong vòng 07 ngày kể từ ngày nhận hàng đối với trường hợp sản phẩm không phù hợp về kích thước hoặc nhu cầu sử dụng.\n\nĐiều kiện đổi hàng theo nhu cầu\n- Sản phẩm còn nguyên tem, nhãn và phụ kiện đi kèm.\n- Sản phẩm chưa qua sử dụng, chưa giặt, chưa sửa chữa hoặc làm thay đổi tình trạng ban đầu.\n- Sản phẩm không bị hư hỏng do lỗi sử dụng hoặc bảo quản từ khách hàng.\n- Khách hàng cung cấp mã đơn hàng hoặc thông tin xác nhận mua hàng.\n- Sản phẩm muốn đổi còn hàng và có kích thước hoặc màu sắc phù hợp để thay thế.\nĐối với sản phẩm khuyến mãi, sản phẩm giới hạn hoặc sản phẩm có điều kiện đổi riêng, điều kiện phải được thông báo tại thời điểm mua.\n\nChi phí vận chuyển đổi trả\n- Đối với trường hợp khách hàng chủ động đổi kích thước hoặc màu sắc nhưng sản phẩm không có lỗi, khách hàng chịu chi phí vận chuyển đổi hàng nếu không có chương trình hỗ trợ khác.\n- Đối với lỗi thuộc về cửa hàng như giao sai, sản phẩm lỗi hoặc thiếu hàng, cửa hàng chịu chi phí hợp lý phát sinh để thu hồi và gửi lại sản phẩm đúng.\n\nCác trường hợp có thể không áp dụng đổi hàng theo nhu cầu\n- Sản phẩm đã qua sử dụng, giặt hoặc bị tác động làm thay đổi tình trạng ban đầu.\n- Sản phẩm hư hỏng do bảo quản hoặc sử dụng không đúng cách.\n- Sản phẩm không còn tem, nhãn hoặc phụ kiện.\n- Yêu cầu đổi theo nhu cầu gửi sau thời hạn 07 ngày.\n- Không cung cấp được thông tin xác định đơn hàng sau khi cửa hàng đã hỗ trợ xác minh.\nCác điều kiện này không được dùng để loại trừ trách nhiệm của cửa hàng đối với sản phẩm giao sai, sản phẩm có lỗi hoặc quyền lợi khác của khách hàng theo quy định pháp luật.\n\nChính sách hoàn tiền\nKhách hàng được xem xét hoàn tiền khi: cửa hàng không thể cung cấp đúng sản phẩm đã xác nhận; sản phẩm bị lỗi và khách hàng lựa chọn phương án hoàn tiền phù hợp; đơn hàng đã thanh toán nhưng bị hủy và không thể tiếp tục thực hiện; khách hàng đã thanh toán nhưng cửa hàng không thể giao hàng; thanh toán trùng hoặc thanh toán thừa; các trường hợp khác được cửa hàng xác nhận đủ điều kiện.\nThời gian xử lý hoàn tiền dự kiến là 05 ngày làm việc kể từ khi yêu cầu được xác nhận và phê duyệt. Thời gian tiền thực tế được ghi có phụ thuộc ngân hàng hoặc đơn vị thanh toán. Với website demo, chỉ ghi nhận trạng thái hoàn tiền mô phỏng, không tuyên bố đã chuyển tiền thật.\n\nQuy trình đổi trả và hoàn tiền\n1. Khách hàng gửi yêu cầu, cung cấp mã đơn hàng, sản phẩm, lý do và hình ảnh/video nếu có.\n2. Cửa hàng kiểm tra thông tin đơn hàng, thời điểm nhận và điều kiện áp dụng.\n3. Cửa hàng thông báo phương án xử lý: đổi size, đổi sản phẩm, gửi bổ sung, hoàn tiền hoặc từ chối có giải thích.\n4. Khách hàng gửi lại sản phẩm nếu cần.\n5. Cửa hàng kiểm tra và hoàn tất xử lý, cập nhật trạng thái để khách hàng theo dõi.\n\nCác tình huống đổi trả thường gặp\n| Tình huống | Hướng xử lý |\n| --- | --- |\n| Sai kích thước hoặc muốn đổi màu | Xem xét đổi nếu còn hàng và đáp ứng điều kiện trong 07 ngày |\n| Giao sai mẫu, màu hoặc thiếu sản phẩm/phụ kiện | Cửa hàng xác minh và chịu trách nhiệm đề xuất giao đúng, bổ sung hoặc phương án phù hợp |\n| Lỗi đường may, rách hoặc hư hỏng có trước khi nhận | Kiểm tra bằng chứng và xem xét đổi hoặc hoàn tiền |\n| Hư hỏng nghi do vận chuyển | Ghi nhận hiện trạng, ảnh/video và đối chiếu quá trình giao nhận |\n\nKhách cần cung cấp mã đơn, mặt hàng cần xử lý, lý do và hình ảnh/video nếu có. Đổi theo nhu cầu khi sản phẩm không lỗi thì khách chịu phí vận chuyển nếu không có ưu đãi khác. Nếu lỗi do cửa hàng như giao sai, lỗi sản phẩm hoặc thiếu hàng, cửa hàng chịu chi phí hợp lý để thu hồi và gửi lại hàng đúng; không dùng điều kiện phí để né trách nhiệm. Yêu cầu hoàn tiền chỉ chuyển sang xử lý sau khi được xác minh và phê duyệt; thời hạn 05 ngày làm việc là thời gian xử lý dự kiến, không bảo đảm thời gian ghi có thực tế.",
+      "warranty": "Hỗ trợ chất lượng trong 30 ngày\nCửa hàng tiếp nhận phản ánh về lỗi chất lượng trong vòng 30 ngày kể từ ngày khách hàng nhận sản phẩm may sẵn. Đây là thời hạn hỗ trợ do dự án đề xuất, không thay thế quyền của khách hàng theo quy định pháp luật và không phải cam kết bảo hành chính hãng.\n\nPhạm vi tiếp nhận\n- Bung chỉ hoặc lỗi đường may có từ trước khi nhận hàng.\n- Hư hỏng phụ kiện đi kèm được xác nhận thuộc tình trạng giao ban đầu.\n- Lỗi hoàn thiện ảnh hưởng đến việc sử dụng sản phẩm.\n\nCách gửi yêu cầu\n1. Gửi mã đơn hàng và mô tả lỗi qua mục Hỗ trợ & Khiếu nại trên website.\n2. Đính kèm ảnh hoặc video thể hiện vị trí và tình trạng lỗi nếu có.\n3. Cửa hàng đối chiếu đơn hàng, thời điểm nhận sản phẩm và thông tin cung cấp.\n4. Cửa hàng thông báo kết quả xác minh cùng phương án hỗ trợ phù hợp.\n\nGiới hạn áp dụng\nHư hỏng do sử dụng sai hướng dẫn, tự sửa đổi, tác động bên ngoài hoặc bảo quản không đúng cách có thể không thuộc phạm vi hỗ trợ. Mỗi trường hợp được xem xét theo tình trạng sản phẩm và bằng chứng thực tế.",
+      "privacy": "VIỆT PHỤC coi trọng việc bảo vệ thông tin cá nhân của khách hàng trong quá trình truy cập, đăng ký tài khoản và thực hiện giao dịch trên website.\n\nThông tin có thể thu thập\n- Họ và tên khách hàng.\n- Số điện thoại.\n- Địa chỉ email.\n- Địa chỉ nhận hàng.\n- Thông tin tài khoản đăng nhập.\n- Lịch sử đặt hàng và giao dịch.\n- Thông tin trao đổi giữa khách hàng và bộ phận hỗ trợ.\nWebsite chỉ yêu cầu những thông tin cần thiết cho từng mục đích cụ thể. Đối với thông tin không bắt buộc, khách hàng có quyền lựa chọn cung cấp hoặc không cung cấp.\n\nMục đích sử dụng\n1. Tiếp nhận và xác nhận đơn hàng.\n2. Liên hệ khách hàng khi cần điều chỉnh thông tin.\n3. Tổ chức giao hàng và hỗ trợ theo dõi đơn.\n4. Xử lý thanh toán, đổi trả, hoàn tiền và khiếu nại.\n5. Quản lý tài khoản và lịch sử mua hàng.\n6. Cải thiện chất lượng dịch vụ và trải nghiệm website.\n7. Gửi thông tin khuyến mãi khi khách hàng đồng ý nhận thông tin tiếp thị.\n8. Thực hiện yêu cầu hợp pháp của cơ quan nhà nước có thẩm quyền.\nKhách hàng có thể từ chối nhận thông tin quảng cáo mà không ảnh hưởng đến việc xử lý đơn hàng đang thực hiện.\n\nPhạm vi chia sẻ\nThông tin chỉ được chia sẻ trong các trường hợp cần thiết: bộ phận quản trị và nhân viên xử lý đơn hàng; đơn vị vận chuyển để giao hàng; đơn vị thanh toán nếu có giao dịch thực tế; đơn vị cung cấp hạ tầng kỹ thuật hoặc lưu trữ; cơ quan nhà nước có thẩm quyền khi có yêu cầu hợp pháp. Website không mua bán hoặc trao đổi thông tin cá nhân của khách hàng vì mục đích thương mại trái với chính sách đã công bố.\n\nThời gian lưu trữ & Biện pháp bảo vệ\nThông tin được lưu trữ trong thời gian cần thiết để phục vụ mục đích thu thập, xử lý đơn hàng, hỗ trợ khách hàng và thực hiện nghĩa vụ pháp lý có liên quan. Khi không còn cần thiết, dữ liệu được xóa, hủy hoặc ẩn danh theo quy trình phù hợp.\n- Xác thực tài khoản khi đăng nhập (mật khẩu băm scrypt).\n- Phân quyền truy cập dữ liệu theo vai trò.\n- Hạn chế quyền truy cập thông tin khách hàng đối với nhân sự không có nhiệm vụ.\n- Không lưu trữ trực tiếp thông tin đầy đủ của thẻ ngân hàng.\n- Sử dụng HTTPS khi triển khai trên môi trường có chứng chỉ bảo mật (hệ thống demo hiện chạy HTTP cục bộ trên máy cá nhân, chưa triển khai HTTPS hay sao lưu đám mây).\n\nQuyền của khách hàng\n- Yêu cầu xem và kiểm tra thông tin cá nhân đã cung cấp.\n- Yêu cầu cập nhật hoặc chỉnh sửa thông tin không chính xác.\n- Yêu cầu ngừng sử dụng thông tin cho mục đích tiếp thị.\n- Yêu cầu xóa hoặc hạn chế xử lý thông tin trong phạm vi pháp luật cho phép.\n- Gửi phản ánh nếu thông tin bị sử dụng sai mục đích hoặc tiết lộ trái phép.",
+      "complaints": "VIỆT PHỤC tiếp nhận phản ánh và khiếu nại liên quan đến: sản phẩm, giá bán, thanh toán, giao hàng, đổi trả và hoàn tiền, bảo mật thông tin.\n\nHình thức tiếp nhận\n- Biểu mẫu liên hệ trên website (Tài khoản > Hỗ trợ & Khiếu nại).\n- Kênh hỗ trợ chính thức của cửa hàng nếu đã được cấu hình.\n- Hotline hoặc email chỉ hiển thị khi quản trị viên đã cung cấp thông tin thực tế (hiện đánh dấu Chưa cấu hình nếu chưa có).\n\nQuy trình giải quyết\n1. Tiếp nhận thông tin khách hàng, mã đơn hàng và nội dung phản ánh.\n2. Xác minh đơn hàng, thanh toán, vận chuyển và chứng cứ liên quan.\n3. Đánh giá nguyên nhân phát sinh.\n4. Đề xuất phương án giải quyết phù hợp (giải thích vấn đề, điều chỉnh thông tin đơn hàng, gửi bổ sung sản phẩm còn thiếu, đổi sản phẩm, tiếp nhận sản phẩm lỗi và hoàn tiền, phối hợp với đơn vị vận chuyển hoặc thanh toán).\n5. Thông báo kết quả, xác nhận hoàn tất và lưu lịch sử xử lý.\n\nThời gian xử lý\n- Khiếu nại thông thường: mục tiêu phản hồi tiếp nhận trong vòng 01 ngày làm việc.\n- Khiếu nại cần xác minh với đơn vị vận chuyển hoặc thanh toán: thông báo tiến độ và cập nhật khi có kết quả.\n- Khiếu nại liên quan đến thông tin cá nhân: ưu tiên xác minh và xử lý.\nĐây là mục tiêu phục vụ khách hàng của dự án, không phải cam kết thời gian hoàn tất mọi vụ việc.\n\nNguyên tắc giải quyết\n- Tôn trọng và lắng nghe khách hàng.\n- Kiểm tra dựa trên chứng cứ và dữ liệu giao dịch.\n- Không tự ý từ chối khiếu nại khi chưa xác minh đầy đủ.\n- Công khai phương án xử lý và thời gian thực hiện.\n- Bảo mật thông tin cá nhân và lưu trữ lịch sử khiếu nại.",
+      "rights": "Quyền của người bán\n- Yêu cầu khách hàng cung cấp thông tin chính xác và cần thiết.\n- Từ chối hoặc hủy đơn khi thông tin không hợp lệ, có dấu hiệu gian lận hoặc không thể đáp ứng.\n- Yêu cầu khách hàng thanh toán đúng số tiền đã xác nhận.\n- Cập nhật giá bán, chương trình khuyến mãi và chính sách; các thay đổi phải được công khai trước khi áp dụng.\n- Từ chối yêu cầu đổi hàng theo nhu cầu nếu không đáp ứng điều kiện đã công bố.\n\nNghĩa vụ của người bán\n- Cung cấp thông tin sản phẩm chính xác, đầy đủ và không gây nhầm lẫn.\n- Bán đúng sản phẩm, kích thước, màu sắc và số lượng khách hàng đặt.\n- Công khai giá bán, phí vận chuyển, phương thức thanh toán và điều kiện giao dịch.\n- Xử lý đơn hàng và giao hàng theo thời gian đã thông báo.\n- Tiếp nhận và giải quyết yêu cầu đổi trả, hoàn tiền và khiếu nại.\n- Bảo vệ thông tin cá nhân của khách hàng.\n- Cung cấp hóa đơn, chứng từ giao dịch theo quy định áp dụng.\n\nQuyền của khách hàng\n- Được cung cấp thông tin đầy đủ về sản phẩm, giá bán, chất liệu, kích thước và màu sắc.\n- Được lựa chọn sản phẩm và phương thức thanh toán phù hợp.\n- Được thông báo phí vận chuyển và tổng tiền trước khi xác nhận.\n- Được theo dõi tình trạng đơn hàng theo chức năng website hỗ trợ.\n- Được yêu cầu đổi trả, hoàn tiền và hỗ trợ khi sản phẩm không đúng cam kết.\n- Được bảo vệ thông tin cá nhân và gửi khiếu nại khi quyền lợi bị ảnh hưởng.\n\nNghĩa vụ của khách hàng\n- Cung cấp thông tin đặt hàng đầy đủ, chính xác.\n- Kiểm tra sản phẩm, kích thước, màu sắc và số lượng trước khi đặt.\n- Thanh toán đầy đủ theo phương thức đã lựa chọn.\n- Phối hợp với cửa hàng và đơn vị vận chuyển.\n- Thông báo kịp thời khi phát hiện sản phẩm sai, thiếu hoặc hư hỏng.\n- Cung cấp thông tin và chứng cứ cần thiết khi yêu cầu đổi trả hoặc khiếu nại.\n- Không sử dụng website vào mục đích gian lận hoặc vi phạm pháp luật.",
+      "orderProcess": "Website phân biệt riêng ba nhóm trạng thái để quản trị viên theo dõi chính xác tiến độ đơn hàng, tránh nhầm lẫn giữa trạng thái đơn hàng, giao hàng và thanh toán:\n\nTrạng thái đơn hàng: Chờ xác nhận · Đã xác nhận · Đang chuẩn bị · Hoàn tất · Đã hủy.\nTrạng thái thanh toán: Chưa thanh toán · Chờ xác nhận · Đã thanh toán · Thanh toán thất bại · Đã hoàn tiền.\nTrạng thái vận chuyển: Chờ lấy hàng · Đang vận chuyển · Giao thành công · Giao thất bại · Hoàn hàng.\n\nThông tin phục vụ đối soát\n- Mã đơn hàng.\n- Mã giao dịch thanh toán nếu có.\n- Tổng giá trị đơn hàng.\n- Số tiền khách hàng đã thanh toán.\n- Phương thức thanh toán.\n- Thời điểm thanh toán.\n- Trạng thái giao dịch.\n- Số tiền cần hoàn nếu có.\n- Thời điểm và trạng thái hoàn tiền.\n\nQuản trị viên cần kiểm tra các trường hợp thanh toán thiếu, thừa, trùng hoặc đơn hàng đã hủy nhưng vẫn có giao dịch. Mọi điều chỉnh liên quan đến tiền phải có thông tin đối chiếu và lịch sử xử lý. Đối với website hiện tại, cần phân biệt rõ: số tiền ghi nhận trong giao dịch mô phỏng, số tiền COD dự kiến thu hộ và số tiền thực tế đã nhận (nếu có dữ liệu xác nhận thật); không được đồng nhất các giá trị trên.\n\nBa nhóm trạng thái và đối soát\n- Đơn hàng: Chờ xác nhận → Đã xác nhận → Đang chuẩn bị → Hoàn tất; đơn có thể chuyển Đã hủy nếu không tiếp tục.\n- Thanh toán: Chưa thanh toán, Chờ xác nhận, Đã thanh toán, Thanh toán thất bại, Chờ hoàn tiền hoặc Đã hoàn tiền.\n- Vận chuyển: Chờ lấy hàng, Đang vận chuyển, Giao thành công, Giao thất bại hoặc Hoàn hàng.\nBa nhóm độc lập: đơn đã tạo không có nghĩa đã thanh toán; thanh toán mô phỏng không chứng minh đã nhận tiền thật; COD là khoản dự kiến thu hộ cho đến khi được đối soát.\n\nKhi đối soát, ghi nhận mã đơn, mã giao dịch nếu có, tổng giá trị, số đã thanh toán, phương thức, thời điểm, trạng thái, số tiền cần hoàn và trạng thái/thời điểm hoàn. Thanh toán thiếu, thừa hoặc trùng cần được xác minh theo chứng từ; đơn đã hủy nhưng có giao dịch cần được đối chiếu và cập nhật phương án hoàn. Lưu lịch sử xử lý để có thể kiểm tra lại.",
+      "size": "Chọn đúng kích thước giúp trang phục truyền thống giữ phom dáng và tạo sự thoải mái khi mặc. Bảng dưới đây chỉ dùng để tham khảo; vóc dáng, chiều cao và số đo thực tế có thể khác nhau dù cân nặng tương đương. Với áo dài hoặc trang phục ôm, hãy ưu tiên số đo cơ thể và bảng riêng của sản phẩm nếu có.\n\nBảng size tham khảo\n| Size | Cân nặng tham khảo |\n| --- | --- |\n| S | 40–47 kg |\n| M | 48–54 kg |\n| L | 55–61 kg |\n| XL | 62–68 kg |\n\nCách chọn size\n1. Xác định cân nặng và chiều cao hiện tại.\n2. Đo vòng ngực và vòng eo; đo vòng hông nếu kiểu trang phục cần.\n3. Đối chiếu thông số với bảng kích thước trên trang sản phẩm.\n4. Với trang phục ôm sát, ưu tiên số đo ngực, eo và hông hơn cân nặng.\n5. Chọn theo kiểu dáng mong muốn và kiểm tra tồn kho của màu, size đó trước khi đặt.\n\nLưu ý\n- Bảng cân nặng chỉ mang tính tham khảo, không bảo đảm vừa với mọi vóc dáng.\n- Nếu sản phẩm có bảng kích thước riêng, hãy ưu tiên thông tin của sản phẩm đó.\n- Dự án chưa có số đo vòng ngực, eo, hông thống nhất cho toàn bộ sản phẩm nên không công bố số đo mẫu.\n- Nếu còn phân vân, hãy gửi câu hỏi qua mục Hỗ trợ & Khiếu nại trên website trước khi đặt hàng."
+    }
+  }
+}
