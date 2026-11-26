@@ -4,12 +4,12 @@ const fs = require('node:fs');
 const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
-const vm = require('node:vm');
 const { setTimeout: delay } = require('node:timers/promises');
 
 const root = path.resolve(__dirname, '..');
 const tmpParent = fs.realpathSync(os.tmpdir());
 const dataDir = fs.mkdtempSync(path.join(tmpParent, 'vietphuc-db-test-'));
+const migDir = fs.mkdtempSync(path.join(tmpParent, 'vietphuc-mig-srv-'));
 let child;
 let base;
 
@@ -21,8 +21,8 @@ async function freePort() {
   return port;
 }
 
-async function request(method, url, value) {
-  const options = { method, headers: {} };
+async function request(method, url, value, headers = {}) {
+  const options = { method, headers: { 'X-VP-Requested': '1', ...headers } };
   if (value !== undefined) {
     options.headers['Content-Type'] = 'application/json';
     options.body = JSON.stringify(value);
@@ -31,16 +31,25 @@ async function request(method, url, value) {
   const text = await response.text();
   let body;
   try { body = JSON.parse(text); } catch { body = text; }
-  return { status: response.status, body };
+  return { status: response.status, body, headers: response.headers };
 }
 
-async function start() {
+const TEST_ADMIN_USER = 'db_qa_admin';
+const TEST_ADMIN_PASS = 'DbQaSecret#2026!';
+
+async function start(dir = dataDir) {
   const port = await freePort();
   base = `http://127.0.0.1:${port}`;
   let logs = '';
   child = spawn(process.execPath, ['server.js'], {
     cwd: root,
-    env: { ...process.env, PORT: String(port), VIETPHUC_DATA_DIR: dataDir },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      VIETPHUC_DATA_DIR: dir,
+      VIETPHUC_ADMIN_USER: TEST_ADMIN_USER,
+      VIETPHUC_ADMIN_PASSWORD: TEST_ADMIN_PASS,
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -48,7 +57,7 @@ async function start() {
   child.stderr.on('data', b => { logs += b; });
   for (let i = 0; i < 80; i++) {
     if (child.exitCode !== null) throw new Error('Server exited early: ' + logs);
-    try { return await request('GET', '/api/state'); } catch { await delay(100); }
+    try { return await request('GET', '/api/public/bootstrap'); } catch { await delay(100); }
   }
   throw new Error('Server did not start: ' + logs);
 }
@@ -61,103 +70,127 @@ async function stop() {
   child = undefined;
 }
 
-async function storefrontSession() {
-  const handlers = {};
-  let overlay;
-  const ids = {};
-  function element(id) {
-    return { id, value:'', textContent:'', innerHTML:'', dataset:{}, listeners:{}, style:{}, classList:{toggle(){}},
-      addEventListener(type, fn){this.listeners[type]=fn;}, setAttribute(){}, scrollIntoView(){}, focus(){},
-      remove(){if(this===overlay)overlay=null;} };
-  }
-  for(const id of ['product-grid','filter-summary','catalog-search','catalog-category','catalog-sort','filter-open','cart-count'])ids[id]=element(id);
-  const document={getElementById:id=>ids[id]||null,querySelector(sel){if(sel==='.vp-overlay')return overlay||null;return null;},
-    querySelectorAll(sel){return sel==='#cart-count,[data-cart-count]'?[ids['cart-count']]:[];},createElement(){return element();},
-    addEventListener(type,fn){(handlers[type]||=[]).push(fn);},head:{appendChild(){}},body:{style:{},prepend(el){ids[el.id]=el;},appendChild(el){if(el.className?.startsWith('vp-overlay'))overlay=el;}}};
-  const local={},session={};
-  const storage=obj=>({getItem:key=>obj[key]??null,setItem(key,value){obj[key]=String(value);}});
-  class FormDataMock {constructor(form){this.values=form.values||{};}get(name){return this.values[name]??null;}getAll(name){const value=this.values[name];return value===undefined?[]:Array.isArray(value)?value:[value];}}
-  const context={document,window:{},location:{hostname:'127.0.0.1',protocol:'http:'},localStorage:storage(local),sessionStorage:storage(session),FormData:FormDataMock,
-    fetch:(url,options)=>fetch(base+url,options),Intl,console,setTimeout(){},clearTimeout(){}};
-  vm.runInNewContext(fs.readFileSync(path.join(root,'dist/app.js'),'utf8'),context,{filename:'app.js'});
-  for(let i=0;i<80;i++){if(ids['database-status']?.textContent.includes('lưu trong file JSON'))break;await delay(50);}
-  assert.match(ids['database-status']?.textContent||'',/lưu trong file JSON/);
-  async function click(action,extra={}) {const target={dataset:{action,...extra},closest(){return this;}};for(const handler of handlers.click)await handler({target});}
-  async function submit(type,values) {const form={dataset:{form:type},values,closest(){return this;}};for(const handler of handlers.submit)await handler({target:form,preventDefault(){}});}
-  await submit('login',{name:'Khách thử nghiệm',email:'test@example.com'});
-  await click('product',{id:'p1'});
-  await click('add');
-  assert.equal(context.window.VietPhuc.getState().cart.length,1);
-  await submit('checkout',{receiver:'Khách thử nghiệm',phone:'0900000000',address:'Địa chỉ thử',shipping:'30000',payment:'COD'});
-  assert.equal(context.window.VietPhuc.getState().cart.length,0);
-  return await request('GET','/api/state');
-}
-
 async function main() {
-  let result = await start();
-  assert.equal(result.status, 200);
-  assert.equal(typeof result.body.revision, 'number');
-  assert.deepEqual(result.body.state.orders, []);
-  assert.deepEqual(result.body.state.stock, {});
-  assert.ok(Array.isArray(result.body.state.products));
-  assert.equal(result.body.state.products.length, 9);
-  assert.ok(result.body.state.products.some(p => p.category === 'Phụ kiện'));
-  console.log('PASS initial state loads from a new data directory');
+  // 1. Khởi tạo DB V2 từ thư mục trống
+  const pub = await start(dataDir);
+  assert.equal(pub.status, 200);
+  assert.equal(pub.body.products.length, 9);
+  assert.equal(pub.body.categories.length, 5);
+  assert.equal(pub.body.stock['VP-P1-DO_TRAM-M'], 10);
+  assert.equal(pub.body.stock['VP-P9-DO_TRAM-ONE_SIZE'], 10);
+  assert.equal('orders' in pub.body, false);
+  assert.equal('customers' in pub.body, false);
+  console.log('PASS public bootstrap initializes V2 seed (10/SKU) without leaking orders or customers');
 
-  const revision = result.body.revision;
-  const products = structuredClone(result.body.state.products);
-  products[0].price += 1000;
-  const state = { products, orders: [{ id: 'VP-TEST-001', items: [{ id: 'p1', size: 'M', qty: 1 }], total: 1250000 }], stock: { 'p1|M': 7 }, visits: 3, cartEvents: 2 };
-  result = await request('PUT', '/api/state', { revision, state });
-  assert.equal(result.status, 200);
-  assert.ok(result.body.revision > revision);
-  const committedRevision = result.body.revision;
+  // 2. Khóa vĩnh viễn /api/state công khai
+  const legacyGet = await request('GET', '/api/state');
+  assert.equal(legacyGet.status, 403);
+  assert.equal(legacyGet.body.error, 'legacy_api_disabled');
+  const legacyPut = await request('PUT', '/api/state', { revision: 0, state: {} });
+  assert.equal(legacyPut.status, 403);
+  console.log('PASS legacy /api/state GET and PUT are disabled');
+
+  // 3. Khung Customer API chặn khi chưa đăng nhập
+  const unauthOrder = await request('POST', '/api/orders', {});
+  assert.equal(unauthOrder.status, 401);
+  const unauthCustomerOrders = await request('GET', '/api/customer/orders');
+  assert.equal(unauthCustomerOrders.status, 401);
+  console.log('PASS customer endpoints reject unauthenticated requests (401)');
+
+  // 4. Transaction Queue: 10 request ghi đồng thời không làm mất cập nhật
+  const tracks = await Promise.all(
+    Array.from({ length: 10 }, () => request('POST', '/api/public/track', { type: 'visit' }))
+  );
+  assert.ok(tracks.every(r => r.status === 200));
+
+  // Đăng nhập Admin để xác minh tổng visits và persistence sau restart
+  const loginRes = await request('POST', '/api/admin/login', { username: TEST_ADMIN_USER, password: TEST_ADMIN_PASS });
+  assert.equal(loginRes.status, 200);
+  const cookie = loginRes.headers.get('set-cookie').split(';')[0];
+  const adminBoot = await request('GET', '/api/admin/bootstrap', undefined, { Cookie: cookie });
+  assert.equal(adminBoot.body.state.visits, 10);
+  const revBeforeFail = adminBoot.body.revision;
+
+  // Kiểm tra Transaction lỗi: không tăng revision và không ghi dữ liệu dở dang
+  const failedTx = await request('PATCH', '/api/admin/orders/NON_EXISTENT/status', { nextStatus: 'confirmed', revision: revBeforeFail }, { Cookie: cookie });
+  assert.equal(failedTx.status, 404);
+  const afterFailedTx = await request('GET', '/api/admin/bootstrap', undefined, { Cookie: cookie });
+  assert.equal(afterFailedTx.body.revision, revBeforeFail);
+
+  // Kiểm tra Revision cũ bị từ chối với HTTP 409
+  const staleRev = await request('PATCH', '/api/admin/orders/VP1/status', { nextStatus: 'confirmed', revision: 0 }, { Cookie: cookie });
+  assert.equal(staleRev.status, 409);
+  assert.equal(staleRev.body.error, 'conflict');
+  console.log('PASS failed transaction preserves revision and stale revision returns 409');
+
   await stop();
-  result = await start();
-  assert.equal(result.body.revision, committedRevision);
-  assert.deepEqual(result.body.state, state);
-  console.log('PASS state and revision survive server restart');
+  await start(dataDir);
+  const login2 = await request('POST', '/api/admin/login', { username: TEST_ADMIN_USER, password: TEST_ADMIN_PASS });
+  const cookie2 = login2.headers.get('set-cookie').split(';')[0];
+  const afterRestart = await request('GET', '/api/admin/bootstrap', undefined, { Cookie: cookie2 });
+  assert.equal(afterRestart.body.state.visits, 10);
+  console.log('PASS transaction queue preserves all 10 concurrent writes across restart');
 
-  const stale = await request('PUT', '/api/state', { revision, state: { ...state, visits: 1 } });
-  assert.equal(stale.status, 409);
-  assert.equal(stale.body.revision, committedRevision);
-  assert.deepEqual(stale.body.state, state);
-  console.log('PASS stale revision cannot overwrite committed data');
-
-  const competing = await Promise.all([
-    request('PUT', '/api/state', { revision: committedRevision, state: { ...state, visits: 4 } }),
-    request('PUT', '/api/state', { revision: committedRevision, state: { ...state, visits: 5 } }),
-  ]);
-  assert.deepEqual(competing.map(x => x.status).sort(), [200, 409]);
-  result = await request('GET', '/api/state');
-  assert.ok([4, 5].includes(result.body.state.visits));
-  assert.deepEqual(result.body.state.orders, state.orders);
-  console.log('PASS concurrent writes detect revision conflicts');
-
-  const invalid = await request('PUT', '/api/state', { revision: result.body.revision, state: { ...result.body.state, stock: { 'p1|M': -1 } } });
-  assert.ok(invalid.status >= 400 && invalid.status < 500);
-  const unchanged = await request('GET', '/api/state');
-  assert.deepEqual(unchanged.body, result.body);
-  console.log('PASS invalid stock cannot corrupt persisted state');
-
+  // 5. Static storefront served without exposing database files
   const page = await request('GET', '/');
   assert.equal(page.status, 200);
   assert.match(page.body, /VIỆT PHỤC/);
-  const fileLeak = await request('GET', '/data/db.json');
+  const fileLeak = await request('GET', '/data/database.json');
   assert.ok(fileLeak.status === 404 || fileLeak.status === 403);
   console.log('PASS static storefront is served without publishing database files');
-
-  const afterOrder = await storefrontSession();
-  assert.equal(afterOrder.body.state.orders.length, 2);
-  assert.equal(afterOrder.body.state.stock['p1|M'], 6);
-  assert.equal(afterOrder.body.state.orders[1].payment, 'COD');
   await stop();
-  const afterRestart = await start();
-  assert.deepEqual(afterRestart.body.state, afterOrder.body.state);
-  console.log('PASS storefront creates a COD order and preserves order and stock after restart');
+
+  // 6. Auto-migration V1 -> V2 khi khởi động server trên database V1 có sẵn
+  const v1Sample = {
+    revision: 2,
+    state: {
+      products: [
+        { id: 'p9', name: 'Mấn gấm đỏ truyền thống', category: 'Phụ kiện', price: 320000, color: 'Đỏ trầm', material: 'Gấm', tag: 'MỚI', img: 'assets/accessory.png', sizes: ['One Size'], addedAt: '2026-07-01' },
+      ],
+      orders: [
+        {
+          id: 'VP-OLD-01',
+          date: '2026-11-24T12:00:00.000Z',
+          email: 'old@example.com',
+          receiver: 'Khách V1',
+          phone: '0900000000',
+          address: 'Hà Nội',
+          items: [{ id: 'p9', name: 'Mấn gấm đỏ truyền thống', color: 'Đỏ trầm', size: 'One Size', qty: 1, price: 320000 }],
+          total: 350000,
+          shippingFee: 30000,
+          payment: 'COD',
+          status: 'Chờ xác nhận',
+          paymentStatus: 'Chưa thanh toán',
+          inventory: 'reserved',
+          settlement: 'Chưa đối soát',
+          history: ['Tạo đơn'],
+        },
+      ],
+      stock: { 'p9|One Size': 6 },
+      visits: 5,
+      cartEvents: 1,
+    },
+  };
+  fs.writeFileSync(path.join(migDir, 'database.json'), JSON.stringify(v1Sample), 'utf8');
+  const migPub = await start(migDir);
+  assert.equal(migPub.status, 200);
+  assert.equal(migPub.body.stock['VP-P9-DO_TRAM-ONE_SIZE'], 6);
+  const filesInMig = fs.readdirSync(migDir);
+  assert.ok(filesInMig.some(f => f.startsWith('database.v1.backup-')));
+  const migLogin = await request('POST', '/api/admin/login', { username: TEST_ADMIN_USER, password: TEST_ADMIN_PASS });
+  const migCookie = migLogin.headers.get('set-cookie').split(';')[0];
+  const migBoot = await request('GET', '/api/admin/bootstrap', undefined, { Cookie: migCookie });
+  assert.equal(migBoot.body.state.orders.length, 1);
+  assert.equal(migBoot.body.state.orders[0].id, 'VP-OLD-01');
+  assert.equal(migBoot.body.state.orders[0].customerId, null);
+  console.log('PASS server auto-migrates V1 database to V2 with verified backup and preserves old order');
 }
 
 main().catch(err => { console.error('FAIL', err); process.exitCode = 1; }).finally(async () => {
   await stop();
-  if (path.dirname(dataDir) === tmpParent && path.basename(dataDir).startsWith('vietphuc-db-test-')) fs.rmSync(dataDir, { recursive: true, force: true });
+  for (const d of [dataDir, migDir]) {
+    if (path.dirname(d) === tmpParent && path.basename(d).startsWith('vietphuc-')) {
+      fs.rmSync(d, { recursive: true, force: true });
+    }
+  }
 });

@@ -11,9 +11,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin.css">
   <script defer src="admin.js"></script>
+  <script defer src="admin-modules.js"></script>
 </head>
 <body>
-
   <!-- 1. Màn hình Đăng nhập (Auth View) -->
   <div id="auth-view" class="auth-wrapper" style="display: none;">
     <div class="auth-card">
@@ -29,19 +29,18 @@
       </div>
 
       <div class="auth-note">
-        <strong>Cổng quản trị cửa hàng:</strong> Đăng nhập để theo dõi đơn hàng, xử lý đổi trả, kiểm tra tồn kho và đối soát COD.
-        <br>Tài khoản thử nghiệm: <code>admin</code> / <code>admin123</code>
+        <strong>Cổng quản trị cửa hàng:</strong> Đăng nhập bằng tài khoản quản trị đã cấu hình trên máy chủ (qua biến môi trường hoặc CLI <code>scripts/init-admin.js</code>).
       </div>
 
       <form id="admin-login-form">
         <div class="form-group">
           <label for="login-username">Tên đăng nhập</label>
-          <input type="text" id="login-username" class="form-control" name="username" value="admin" autocomplete="username" required autofocus>
+          <input type="text" id="login-username" class="form-control" name="username" placeholder="Nhập tên đăng nhập" autocomplete="username" required autofocus>
         </div>
         <div class="form-group">
           <label for="login-password">Mật khẩu</label>
           <div class="password-field">
-            <input type="password" id="login-password" class="form-control" name="password" value="admin123" autocomplete="current-password" style="padding-right: 42px;" required>
+            <input type="password" id="login-password" class="form-control" name="password" placeholder="Nhập mật khẩu" autocomplete="current-password" style="padding-right: 42px;" required>
             <button type="button" id="toggle-password-btn" class="password-toggle" aria-label="Hiện hoặc ẩn mật khẩu" title="Hiện/ẩn mật khẩu">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/>
@@ -86,18 +85,6 @@
 
       <div class="sidebar-nav-label">Vận hành cửa hàng</div>
       <nav class="sidebar-nav">
-        <button class="nav-item active" type="button" data-tab="orders">
-          <div class="nav-item-left">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
-              <rect x="9" y="3" width="6" height="4" rx="1"/>
-              <path d="M9 12h6"/><path d="M9 16h4"/>
-            </svg>
-            <span>Quản lý Đơn hàng</span>
-          </div>
-          <span class="badge badge-count" id="pending-orders-badge">0</span>
-        </button>
-
         <button class="nav-item" type="button" data-tab="dashboard">
           <div class="nav-item-left">
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -106,19 +93,30 @@
               <rect x="14" y="12" width="7" height="9" rx="1"/>
               <rect x="3" y="16" width="7" height="5" rx="1"/>
             </svg>
-            <span>Tổng quan & Báo cáo</span>
+            <span>Tổng quan</span>
           </div>
         </button>
 
-        <button class="nav-item" type="button" data-tab="returns">
+        <button class="nav-item active" type="button" data-tab="orders">
           <div class="nav-item-left">
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>
-              <path d="M3 3v5h5"/>
+              <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+              <rect x="9" y="3" width="6" height="4" rx="1"/>
+              <path d="M9 12h6"/><path d="M9 16h4"/>
             </svg>
-            <span>Đổi trả & Khiếu nại</span>
+            <span>Đơn hàng</span>
           </div>
-          <span class="badge badge-count" id="returns-badge">0</span>
+          <span class="badge badge-count" id="pending-orders-badge">0</span>
+        </button>
+
+        <button class="nav-item" type="button" data-tab="products">
+          <div class="nav-item-left">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z"/>
+              <circle cx="7" cy="7" r="1.5"/>
+            </svg>
+            <span>Danh mục & Sản phẩm</span>
+          </div>
         </button>
 
         <button class="nav-item" type="button" data-tab="inventory">
@@ -128,17 +126,18 @@
               <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
               <path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>
             </svg>
-            <span>Quản lý Tồn kho</span>
+            <span>Tồn kho SKU</span>
           </div>
         </button>
 
-        <button class="nav-item" type="button" data-tab="products">
+        <button class="nav-item" type="button" data-tab="customers">
           <div class="nav-item-left">
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z"/>
-              <circle cx="7" cy="7" r="1.5"/>
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
-            <span>Sản phẩm</span>
+            <span>Khách hàng</span>
           </div>
         </button>
 
@@ -148,7 +147,57 @@
               <rect x="2" y="5" width="20" height="14" rx="2"/>
               <path d="M2 10h20"/><path d="M6 15h4"/>
             </svg>
-            <span>Đối soát COD</span>
+            <span>Thanh toán & Hoàn tiền</span>
+          </div>
+        </button>
+
+        <button class="nav-item" type="button" data-tab="shipping">
+          <div class="nav-item-left">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="1" y="3" width="15" height="13" rx="1"/>
+              <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
+              <circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+            </svg>
+            <span>Vận chuyển</span>
+          </div>
+        </button>
+
+        <button class="nav-item" type="button" data-tab="returns">
+          <div class="nav-item-left">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+            <span>Đổi trả & Bảo hành</span>
+          </div>
+          <span class="badge badge-count" id="returns-badge">0</span>
+        </button>
+
+        <button class="nav-item" type="button" data-tab="promotions">
+          <div class="nav-item-left">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z"/>
+            </svg>
+            <span>Khuyến mãi</span>
+          </div>
+        </button>
+
+        <button class="nav-item" type="button" data-tab="policies">
+          <div class="nav-item-left">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            <span>Chính sách & Nội dung</span>
+          </div>
+        </button>
+
+        <button class="nav-item" type="button" data-tab="reports">
+          <div class="nav-item-left">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+            <span>Báo cáo & Thống kê</span>
           </div>
         </button>
       </nav>
@@ -254,6 +303,8 @@
                   <option value="COD">Thu tiền khi nhận (COD)</option>
                   <option value="online">Chuyển khoản trực tuyến</option>
                 </select>
+
+                <input type="date" id="filter-order-date" class="select-filter" aria-label="Lọc theo ngày đặt" title="Lọc theo ngày đặt">
 
                 <button id="btn-reset-order-filters" type="button" class="btn btn-outline btn-sm" style="display: none;">
                   Xóa lọc
@@ -617,12 +668,30 @@
           </div>
         </section>
 
+        <!-- TAB 7: CUSTOMERS (QUẢN LÝ KHÁCH HÀNG) -->
+        <section id="pane-customers" class="tab-pane" style="display: none;"></section>
+
+        <!-- TAB 8: SHIPPING (QUẢN LÝ VẬN CHUYỂN) -->
+        <section id="pane-shipping" class="tab-pane" style="display: none;"></section>
+
+        <!-- TAB 9: PROMOTIONS (QUẢN LÝ KHUYẾN MÃI) -->
+        <section id="pane-promotions" class="tab-pane" style="display: none;"></section>
+
+        <!-- TAB 10: POLICIES & SITE CONTENT (CHÍNH SÁCH & NỘI DUNG) -->
+        <section id="pane-policies" class="tab-pane" style="display: none;"></section>
+
+        <!-- TAB 11: REPORTS & ACTIVITY LOGS (BÁO CÁO & THỐNG KÊ) -->
+        <section id="pane-reports" class="tab-pane" style="display: none;"></section>
+
       </div>
     </main>
   </div>
 
   <!-- DRAWER / MODAL CHI TIẾT & XỬ LÝ ĐƠN HÀNG (ORDER DETAIL DRAWER) -->
   <div id="order-drawer-container"></div>
+
+  <!-- MODAL FORM QUẢN TRỊ (SẢN PHẨM, DANH MỤC, KHUYẾN MÃI, TỒN KHO, KHÁCH HÀNG) -->
+  <div id="admin-modal-container"></div>
 
   <!-- CUSTOM DIALOG CONTAINER (THAY THẾ CONFIRM / PROMPT MẶC ĐỊNH) -->
   <div id="custom-dialog-container"></div>

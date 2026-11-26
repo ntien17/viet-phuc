@@ -11,6 +11,10 @@ const tmpParent = fs.realpathSync(os.tmpdir());
 const dataDir = fs.mkdtempSync(path.join(tmpParent, 'vietphuc-admin-test-'));
 let child;
 let base;
+let portUsed;
+
+const TEST_ADMIN_USER = 'qa_admin';
+const TEST_ADMIN_PASS = 'QaSecret#2026!';
 
 async function freePort() {
   const server = net.createServer();
@@ -21,7 +25,7 @@ async function freePort() {
 }
 
 async function request(method, url, value, headers = {}) {
-  const options = { method, headers: { ...headers } };
+  const options = { method, headers: { 'X-VP-Requested': '1', ...headers } };
   if (value !== undefined) {
     options.headers['Content-Type'] = 'application/json';
     options.body = JSON.stringify(value);
@@ -33,13 +37,19 @@ async function request(method, url, value, headers = {}) {
   return { status: response.status, body, headers: response.headers };
 }
 
-async function start() {
-  const port = await freePort();
-  base = `http://127.0.0.1:${port}`;
+async function start(extraEnv = {}) {
+  portUsed = await freePort();
+  base = `http://127.0.0.1:${portUsed}`;
   let logs = '';
+  const env = { ...process.env, PORT: String(portUsed), VIETPHUC_DATA_DIR: dataDir, VIETPHUC_TEST_MODE: '1', ...extraEnv };
+  if (!('VIETPHUC_ADMIN_USER' in extraEnv)) delete env.VIETPHUC_ADMIN_USER;
+  if (!('VIETPHUC_ADMIN_PASSWORD' in extraEnv)) delete env.VIETPHUC_ADMIN_PASSWORD;
+  if (!('VIETPHUC_ADMIN_PASSWORD_HASH' in extraEnv)) delete env.VIETPHUC_ADMIN_PASSWORD_HASH;
+  if (!('VIETPHUC_ADMIN_SALT' in extraEnv)) delete env.VIETPHUC_ADMIN_SALT;
+
   child = spawn(process.execPath, ['server.js'], {
     cwd: root,
-    env: { ...process.env, PORT: String(port), VIETPHUC_DATA_DIR: dataDir },
+    env,
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -47,7 +57,7 @@ async function start() {
   child.stderr.on('data', b => { logs += b; });
   for (let i = 0; i < 80; i++) {
     if (child.exitCode !== null) throw new Error('Server exited early: ' + logs);
-    try { return await request('GET', '/api/state'); } catch { await delay(100); }
+    try { return await request('GET', '/api/admin/session'); } catch { await delay(100); }
   }
   throw new Error('Server did not start: ' + logs);
 }
@@ -61,79 +71,162 @@ async function stop() {
 }
 
 async function main() {
-  await start();
+  // 1. Khi chưa cấu hình Admin -> login trả 503 admin_not_configured
+  await start({});
+  const notCfg = await request('POST', '/api/admin/login', { username: 'admin', password: 'any' });
+  assert.equal(notCfg.status, 503);
+  assert.equal(notCfg.body.error, 'admin_not_configured');
+  console.log('PASS unconfigured admin login returns 503 admin_not_configured');
+  await stop();
 
-  // 1. Phục vụ trang admin.html, admin.css, admin.js
+  // 2. Khởi động server với tài khoản cấu hình qua env (không dùng tài khoản mặc định)
+  await start({ VIETPHUC_ADMIN_USER: TEST_ADMIN_USER, VIETPHUC_ADMIN_PASSWORD: TEST_ADMIN_PASS });
+
   const page = await request('GET', '/admin.html');
   assert.equal(page.status, 200);
   assert.match(page.body, /Quản lý Đơn hàng/);
+  assert.doesNotMatch(page.body, /admin123/);
+  assert.doesNotMatch(page.body, /value="admin"/);
 
   const js = await request('GET', '/admin.js');
   assert.equal(js.status, 200);
   assert.match(js.body, /checkSession/);
+  assert.doesNotMatch(js.body, /admin123/);
 
   const css = await request('GET', '/admin.css');
   assert.equal(css.status, 200);
-  console.log('PASS admin static assets served correctly');
+  console.log('PASS admin assets served without hardcoded credentials');
 
-  // 2. Kiểm tra session khi chưa đăng nhập
-  const unauthSession = await request('GET', '/api/admin/session');
-  assert.equal(unauthSession.status, 200);
-  assert.equal(unauthSession.body.loggedIn, false);
-  console.log('PASS unauthenticated session returns loggedIn: false');
+  // 3. Endpoint dữ liệu chặn khi chưa đăng nhập (401)
+  assert.equal((await request('GET', '/api/admin/bootstrap')).status, 401);
+  assert.equal((await request('PATCH', '/api/admin/orders/VP1/status', { nextStatus: 'confirmed', revision: 0 })).status, 401);
 
-  // 3. Đăng nhập sai mật khẩu
-  const badLogin = await request('POST', '/api/admin/login', { username: 'admin', password: 'wrongpassword' });
-  assert.equal(badLogin.status, 401);
-  assert.equal(badLogin.body.error, 'invalid_credentials');
-  console.log('PASS invalid admin credentials rejected');
+  // 4. Đăng nhập sai mật khẩu + rate limit (5 lần -> 429)
+  for (let i = 0; i < 5; i++) {
+    const bad = await request('POST', '/api/admin/login', { username: TEST_ADMIN_USER, password: 'wrongpassword' });
+    assert.equal(bad.status, 401);
+  }
+  assert.equal((await request('POST', '/api/admin/login', { username: TEST_ADMIN_USER, password: TEST_ADMIN_PASS })).status, 429);
+  console.log('PASS admin rate limit enforced (429)');
 
-  // 4. Đăng nhập đúng mật khẩu
-  const goodLogin = await request('POST', '/api/admin/login', { username: 'admin', password: 'admin123' });
+  await stop();
+  await start({ VIETPHUC_ADMIN_USER: TEST_ADMIN_USER, VIETPHUC_ADMIN_PASSWORD: TEST_ADMIN_PASS });
+
+  // 5. Đăng nhập đúng + Kiểm tra BUSINESS_CONFIG
+  const goodLogin = await request('POST', '/api/admin/login', { username: TEST_ADMIN_USER, password: TEST_ADMIN_PASS });
   assert.equal(goodLogin.status, 200);
-  assert.equal(goodLogin.body.success, true);
-  const cookie = goodLogin.headers.get('set-cookie');
-  assert.ok(cookie && cookie.includes('vp_admin_session='));
-  console.log('PASS admin login succeeded and issued session cookie');
+  const adminCookie = goodLogin.headers.get('set-cookie').split(';')[0];
+  assert.ok(adminCookie.startsWith('vp_admin_session='));
 
-  // 5. Kiểm tra session với cookie hợp lệ
-  const cookieVal = cookie.split(';')[0];
-  const authSession = await request('GET', '/api/admin/session', undefined, { Cookie: cookieVal });
-  assert.equal(authSession.status, 200);
-  assert.equal(authSession.body.loggedIn, true);
-  assert.equal(authSession.body.user, 'admin');
-  console.log('PASS admin session recognized with valid cookie');
+  const bootstrap = await request('GET', '/api/admin/bootstrap', undefined, { Cookie: adminCookie });
+  assert.equal(bootstrap.status, 200);
+  assert.equal(bootstrap.body.config.shipping.standardFee, 30000);
+  assert.equal(bootstrap.body.config.shipping.remoteFee, 45000);
+  assert.equal(bootstrap.body.config.codFee, 0);
+  assert.equal(bootstrap.body.config.returnWindowDays, 7);
+  console.log('PASS admin login & BUSINESS_CONFIG bootstrap verified');
 
-  // 6. Đăng xuất
-  const logoutRes = await request('POST', '/api/admin/logout', undefined, { Cookie: cookieVal });
-  assert.equal(logoutRes.status, 200);
-  const afterLogout = await request('GET', '/api/admin/session', undefined, { Cookie: cookieVal });
-  assert.equal(afterLogout.body.loggedIn, false);
+  // 6. Kiểm tra CSRF (đủ 6 trường hợp)
+  // 6a. Origin cùng nguồn + custom header hợp lệ -> 200
+  const csrfOkOrigin = await fetch(base + '/api/public/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base, 'X-VP-Requested': '1' },
+    body: JSON.stringify({ type: 'visit' }),
+  });
+  assert.equal(csrfOkOrigin.status, 200);
+
+  // 6b. Origin cùng nguồn nhưng thiếu custom header -> 403
+  const csrfNoHeader = await fetch(base + '/api/public/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base },
+    body: JSON.stringify({ type: 'visit' }),
+  });
+  assert.equal(csrfNoHeader.status, 403);
+
+  // 6c. Origin khác nguồn + custom header hợp lệ -> 403
+  const csrfBadOrigin = await fetch(base + '/api/public/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: 'http://evil.example', 'X-VP-Requested': '1' },
+    body: JSON.stringify({ type: 'visit' }),
+  });
+  assert.equal(csrfBadOrigin.status, 403);
+
+  // 6d. Không Origin, không Referer, thiếu custom header -> 403
+  const csrfNoAll = await fetch(base + '/api/public/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'visit' }),
+  });
+  assert.equal(csrfNoAll.status, 403);
+
+  // 6e. Không Origin/Referer nhưng có custom header hợp lệ -> 200
+  const csrfHeaderOnly = await fetch(base + '/api/public/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-VP-Requested': '1' },
+    body: JSON.stringify({ type: 'visit' }),
+  });
+  assert.equal(csrfHeaderOnly.status, 200);
+
+  // 6f. Referer khác nguồn + custom header hợp lệ -> 403
+  const csrfBadReferer = await fetch(base + '/api/public/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Referer: 'http://evil.example/attack', 'X-VP-Requested': '1' },
+    body: JSON.stringify({ type: 'visit' }),
+  });
+  assert.equal(csrfBadReferer.status, 403);
+  console.log('PASS all 6 CSRF scenarios enforced');
+
+  // 7. Kiểm tra phân tách session Admin vs Customer & khóa Customer
+  // Tạo 2 customer session test và 1 đơn hàng gắn với cus_b để test phân quyền
+  const cusARes = await request('POST', '/api/_test/customer-session', { customerId: 'cus_a', locked: false });
+  const cusACookie = cusARes.headers.get('set-cookie').split(';')[0];
+  const cusBRes = await request('POST', '/api/_test/customer-session', { customerId: 'cus_b', locked: false });
+  const cusBCookie = cusBRes.headers.get('set-cookie').split(';')[0];
+
+  // Ghi nhận 1 đơn hàng thuộc cus_b trực tiếp vào data/database.json qua restart để test truy cập chéo
+  await stop();
+  const dbNow = JSON.parse(fs.readFileSync(path.join(dataDir, 'database.json'), 'utf8'));
+  dbNow.state.orders.push({
+    id: 'VP-OWNED-B',
+    createdAt: new Date().toISOString(),
+    customerId: 'cus_b',
+    receiver: 'Khách B',
+    phone: '0900',
+    address: 'HCM',
+    items: [{ productId: 'p1', sku: 'VP-P1-DO_TRAM-M', name: 'Áo dài', img: '', color: 'Đỏ trầm', size: 'M', qty: 1, unitPrice: 1250000 }],
+    subtotal: 1250000, shippingFee: 30000, discountCode: null, discountAmount: 0, total: 1280000,
+    paymentMethod: 'COD', orderStatus: 'pending', paymentStatus: 'unpaid', settlementStatus: 'unsettled', inventoryStatus: 'reserved',
+    shipment: {}, transactions: [], refunds: [], policySnapshot: {}, history: [],
+  });
+  fs.writeFileSync(path.join(dataDir, 'database.json'), JSON.stringify(dbNow, null, 2), 'utf8');
+  await start({ VIETPHUC_ADMIN_USER: TEST_ADMIN_USER, VIETPHUC_ADMIN_PASSWORD: TEST_ADMIN_PASS });
+
+  const adminLogin2 = await request('POST', '/api/admin/login', { username: TEST_ADMIN_USER, password: TEST_ADMIN_PASS });
+  const adminCookie2 = adminLogin2.headers.get('set-cookie').split(';')[0];
+  const cusARes2 = await request('POST', '/api/_test/customer-session', { customerId: 'cus_a', locked: false });
+  const cusACookie2 = cusARes2.headers.get('set-cookie').split(';')[0];
+  const cusBCookie2 = (await request('POST', '/api/_test/customer-session', { customerId: 'cus_b', locked: false })).headers.get('set-cookie').split(';')[0];
+
+  // 7a. vp_admin_session gọi Customer API -> 401
+  assert.equal((await request('GET', '/api/customer/orders', undefined, { Cookie: adminCookie2 })).status, 401);
+  // 7b. vp_customer_session gọi Admin API -> 401
+  assert.equal((await request('GET', '/api/admin/bootstrap', undefined, { Cookie: cusACookie2 })).status, 401);
+  // 7c. Customer A truy cập đơn của Customer B -> 403
+  assert.equal((await request('GET', '/api/customer/orders/VP-OWNED-B', undefined, { Cookie: cusACookie2 })).status, 403);
+  assert.equal((await request('GET', '/api/customer/orders/VP-OWNED-B', undefined, { Cookie: cusBCookie2 })).status, 200);
+  // 7d. Customer bị khóa -> 403 và vô hiệu hóa session
+  await request('POST', '/api/_test/customer-session', { customerId: 'cus_a', locked: true });
+  const lockedCall = await request('GET', '/api/customer/orders', undefined, { Cookie: cusACookie2 });
+  assert.equal(lockedCall.status, 403);
+  assert.equal(lockedCall.body.error, 'account_locked');
+  // Gọi lại lần 2 bằng cookie cũ sau khi bị thu hồi -> 401
+  assert.equal((await request('GET', '/api/customer/orders', undefined, { Cookie: cusACookie2 })).status, 401);
+  console.log('PASS session separation, cross-customer isolation (403) and locked-account revocation verified');
+
+  // 8. Admin logout
+  assert.equal((await request('POST', '/api/admin/logout', undefined, { Cookie: adminCookie2 })).status, 200);
+  assert.equal((await request('GET', '/api/admin/session', undefined, { Cookie: adminCookie2 })).body.loggedIn, false);
   console.log('PASS admin logout terminates session');
-
-  // 7. Kiểm tra nới lỏng validState() cho categories, policies, inventoryLogs
-  const stateRes = await request('GET', '/api/state');
-  const revision = stateRes.body.revision;
-  const extendedState = {
-    ...stateRes.body.state,
-    categories: ['Áo dài truyền thống', 'Áo bà ba', 'Áo tứ thân', 'Phụ kiện', 'Áo dài cách tân'],
-    policies: { returnDays: 7, freeShipThreshold: 1000000 },
-    inventoryLogs: [{ id: 'p1', size: 'M', delta: 5, date: '2026-11-25' }]
-  };
-  const putExtended = await request('PUT', '/api/state', { revision, state: extendedState });
-  assert.equal(putExtended.status, 200);
-  assert.deepEqual(putExtended.body.state.categories, extendedState.categories);
-  assert.deepEqual(putExtended.body.state.policies, extendedState.policies);
-  console.log('PASS extended validState allows categories, policies and inventoryLogs');
-
-  // 8. Kiểm tra từ chối trường lạ không an toàn
-  const invalidState = {
-    ...stateRes.body.state,
-    unexpectedRandomField: 12345
-  };
-  const putInvalid = await request('PUT', '/api/state', { revision: putExtended.body.revision, state: invalidState });
-  assert.equal(putInvalid.status, 400);
-  console.log('PASS unexpected arbitrary fields are safely rejected by validState');
 }
 
 main().catch(err => { console.error('FAIL', err); process.exitCode = 1; }).finally(async () => {
