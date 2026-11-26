@@ -4,14 +4,17 @@
   const ALLOWED_COLORS = ['Đỏ', 'Đen', 'Trắng', 'Đỏ trầm', 'Trắng ngà', 'Nâu đất', 'Hồng sen', 'Hồng phấn', 'Xanh nhạt', 'Xanh rêu'];
   const RETURN_TYPE_VI = { return: 'Trả hàng', exchange: 'Đổi hàng', warranty: 'Bảo hành' };
   const POLICY_KEYS = [
-    ['purchase', 'Chính sách mua hàng'],
-    ['payment', 'Chính sách thanh toán'],
-    ['shipping', 'Chính sách giao hàng'],
-    ['returns', 'Chính sách đổi trả (7 ngày)'],
-    ['warranty', 'Chính sách bảo hành'],
-    ['terms', 'Điều khoản sử dụng'],
-    ['privacy', 'Chính sách bảo mật'],
-    ['size', 'Hướng dẫn chọn size'],
+    ['pricing', '1. Giá bán & Khuyến mãi'],
+    ['purchase', '2. Mua hàng & Đặt hàng'],
+    ['payment', '3. Thanh toán'],
+    ['shipping', '4. Vận chuyển & Giao nhận'],
+    ['returns', '5. Đổi trả & Hoàn tiền (7 ngày)'],
+    ['warranty', '6. Hỗ trợ chất lượng (30 ngày)'],
+    ['privacy', '7. Bảo mật thông tin'],
+    ['complaints', '8. Giải quyết khiếu nại'],
+    ['rights', '9. Quyền & Nghĩa vụ các bên'],
+    ['orderProcess', '10. Quản lý đơn hàng & Đối soát'],
+    ['size', '11. Hướng dẫn chọn size & Sản phẩm'],
   ];
 
   let dashRange = '30d';
@@ -1007,10 +1010,10 @@
       tbody.innerHTML = filtered.map(r => `
         <tr>
           <td><span class="order-code">${esc(r.id)}</span><br><small>${esc(formatDate(r.createdAt))}</small></td>
-          <td><span class="order-code">${esc(r.orderId)}</span></td>
+          <td><span class="order-code">${esc(r.orderId)}</span>${r.shippingFeeBearer ? `<br><small class="badge ${r.shippingFeeBearer === 'store' ? 'badge-info' : 'badge-warning'}">${r.shippingFeeBearer === 'store' ? 'Shop chịu phí VC' : 'Khách chịu phí VC'}</small>` : ''}</td>
           <td>${esc(RETURN_TYPE_VI[r.type] || r.type)}</td>
           <td><small>${(r.items || []).map(it => `${esc(it.name || it.productId)} × ${it.qty} (${esc(it.condition)})`).join('<br>')}</small></td>
-          <td>${esc(r.reason)}</td>
+          <td>${esc(r.reason)}${r.description ? `<br><small class="text-muted">${esc(r.description)}</small>` : ''}${(r.images && r.images.length) ? `<br><small>Minh họa (${r.images.length}): ${r.images.map(im => esc(im)).join(', ')}</small>` : ''}</td>
           <td>${getStatusBadgeHtml(r.status)}</td>
           <td class="text-right">
             ${r.status === 'pending' ? `
@@ -1247,8 +1250,10 @@
   function renderPolicies() {
     const { esc, formatDate } = B();
     const s = B().getState();
-    const pol = s.policies || { version: 1, storeInfo: {}, banners: {}, items: {} };
+    const pol = s.policies || { version: 1, storeInfo: {}, banners: {}, visibility: {}, items: {} };
+    const vis = pol.visibility || {};
     const versions = (s.policyVersions || []).slice().reverse();
+    const tickets = (s.supportTickets || []).slice().reverse();
     const pane = document.getElementById('pane-policies');
     if (!pane) return;
 
@@ -1257,20 +1262,35 @@
         <div class="card-header">
           <div class="card-title-wrap">
             <h3 class="card-title">Chính sách & Nội dung Storefront (Phiên bản hiện tại: v${pol.version || 1})</h3>
-            <span class="card-subtitle">Cập nhật tự động đồng bộ sang Storefront (/api/public/bootstrap) và lưu lịch sử vào policyVersions.</span>
+            <span class="card-subtitle">Cập nhật tự động đồng bộ sang Storefront (/api/public/bootstrap) và lưu lịch sử vào policyVersions. Có thể bật/tắt hiển thị từng nhóm chính sách.</span>
           </div>
         </div>
         <div class="card-body">
           <form id="policies-form">
             <div class="form-grid-2">
-              <div class="form-group"><label>Tên cửa hàng</label><input class="form-control" name="store_name" value="${esc(pol.storeInfo?.name || 'VIỆT PHỤC')}"></div>
-              <div class="form-group"><label>Hotline / Liên hệ</label><input class="form-control" name="store_phone" value="${esc(pol.storeInfo?.phone || '1900 0000')}"></div>
+              <div class="form-group"><label>Tên cửa hàng</label><input class="form-control" name="store_name" value="${esc(pol.storeInfo?.name || 'VIỆT PHỤC — Traditional Clothing')}"></div>
+              <div class="form-group"><label>Hotline / Liên hệ</label><input class="form-control" name="store_hotline" value="${esc(pol.storeInfo?.hotline || 'Chưa cấu hình')}" placeholder="Chưa cấu hình"></div>
+              <div class="form-group"><label>Email liên hệ</label><input class="form-control" name="store_email" value="${esc(pol.storeInfo?.email || 'Chưa cấu hình')}" placeholder="Chưa cấu hình"></div>
+              <div class="form-group"><label>Địa chỉ cửa hàng</label><input class="form-control" name="store_address" value="${esc(pol.storeInfo?.address || 'Chưa cấu hình')}" placeholder="Chưa cấu hình"></div>
+              <div class="form-group"><label>Giờ hỗ trợ</label><input class="form-control" name="store_hours" value="${esc(pol.storeInfo?.hours || 'Thứ 2 – Thứ 7: 08:00 – 17:00')}"></div>
+              <div class="form-group"><label>Mạng xã hội</label><input class="form-control" name="store_social" value="${esc(pol.storeInfo?.social || 'Chưa cấu hình')}" placeholder="Chưa cấu hình"></div>
               <div class="form-group"><label>Tiêu đề Banner / Thông báo</label><input class="form-control" name="banner_title" value="${esc(pol.banners?.notice || '')}" placeholder="Thông báo cửa hàng..."></div>
               <div class="form-group"><label>Ghi chú phiên bản *</label><input class="form-control" name="note" required value="Cập nhật chính sách & nội dung"></div>
             </div>
-            ${POLICY_KEYS.map(([k, lbl]) => `
-              <div class="form-group"><label>${esc(lbl)}</label><textarea class="form-control" name="item_${k}" rows="2">${esc(pol.items?.[k] || '')}</textarea></div>
-            `).join('')}
+            ${POLICY_KEYS.map(([k, lbl]) => {
+              const isPub = vis[k] !== false;
+              return `
+              <div class="form-group" style="border:1px solid var(--border);padding:12px;border-radius:6px;margin-bottom:12px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:12px">
+                  <label style="margin:0;font-weight:600">${esc(lbl)}</label>
+                  <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                    <input type="checkbox" name="vis_${k}" ${isPub ? 'checked' : ''}>
+                    <span class="badge ${isPub ? 'badge-success' : 'badge-neutral'}">${isPub ? 'Đang công khai' : 'Đang ẩn'}</span>
+                  </label>
+                </div>
+                <textarea class="form-control" name="item_${k}" rows="12" aria-label="Nội dung ${esc(lbl)}">${esc(pol.items?.[k] || '')}</textarea>
+              </div>`;
+            }).join('')}
             <button type="submit" class="btn btn-primary">Lưu & Tạo phiên bản mới</button>
           </form>
         </div>
@@ -1280,24 +1300,110 @@
         <div class="card-header"><div class="card-title-wrap"><h3 class="card-title">Lịch sử phiên bản chính sách (${versions.length})</h3></div></div>
         <div class="table-responsive">
           <table class="admin-table">
-            <thead><tr><th>Phiên bản</th><th>Thời gian lưu</th><th>Người thực hiện</th><th>Ghi chú</th></tr></thead>
+            <thead><tr><th>Phiên bản</th><th>Thời gian lưu</th><th>Người thực hiện</th><th>Ghi chú</th><th class="text-right">Chi tiết</th></tr></thead>
             <tbody>
-              ${versions.length ? versions.map(v => `<tr><td><strong>v${v.version}</strong></td><td>${esc(formatDate(v.archivedAt || v.updatedAt))}</td><td>${esc(v.actor || 'admin')}</td><td>${esc(v.note || '')}</td></tr>`).join('') : '<tr><td colspan="4" class="text-center" style="padding:18px">Chưa có phiên bản lưu trữ trước đó.</td></tr>'}
+              ${versions.length ? versions.map((v, idx) => `<tr><td><strong>v${v.version}</strong></td><td>${esc(formatDate(v.archivedAt || v.updatedAt))}</td><td>${esc(v.actor || 'admin')}</td><td>${esc(v.note || '')}</td><td class="text-right"><button type="button" class="btn btn-outline btn-sm" data-pol-ver="${idx}">Xem nội dung</button></td></tr>`).join('') : '<tr><td colspan="5" class="text-center" style="padding:18px">Chưa có phiên bản lưu trữ trước đó.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-wrap">
+            <h3 class="card-title">Khiếu nại & Hỗ trợ khách hàng (${tickets.length})</h3>
+            <span class="card-subtitle">Mục tiêu phản hồi tiếp nhận: 01 ngày làm việc. Lưu lịch sử phản hồi tại supportTickets.</span>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead><tr><th>Mã</th><th>Khách hàng / Đơn</th><th>Tiêu đề & Nội dung</th><th>Trạng thái</th><th>Phản hồi Admin</th><th class="text-right">Xử lý</th></tr></thead>
+            <tbody>
+              ${tickets.length ? tickets.map(t => `
+                <tr>
+                  <td><span class="order-code">${esc(t.id)}</span><br><small>${esc(formatDate(t.createdAt))}</small></td>
+                  <td>${esc(t.email)}${t.orderId ? `<br><span class="order-code">${esc(t.orderId)}</span>` : ''}</td>
+                  <td><b>${esc(t.subject)}</b><br><small>${esc(t.message)}</small></td>
+                  <td>${getStatusBadgeHtml(t.status)}</td>
+                  <td><small>${esc(t.adminReply || 'Chưa phản hồi')}</small></td>
+                  <td class="text-right"><button type="button" class="btn btn-primary btn-sm" data-ticket-reply="${esc(t.id)}">Phản hồi / Cập nhật</button></td>
+                </tr>
+              `).join('') : '<tr><td colspan="6" class="text-center" style="padding:18px">Chưa có yêu cầu hỗ trợ / khiếu nại nào.</td></tr>'}
             </tbody>
           </table>
         </div>
       </div>
     `;
 
+    pane.querySelectorAll('[data-pol-ver]').forEach(btn => btn.addEventListener('click', () => {
+      const v = versions[Number(btn.dataset.polVer)];
+      if (!v) return;
+      const snap = v.snapshot || {};
+      openModal(`Lịch sử Chính sách v${v.version}`, `
+        <p class="text-muted">Lưu lúc: ${esc(formatDate(v.archivedAt || v.updatedAt))} · Người thực hiện: ${esc(v.actor || 'admin')}</p>
+        ${Object.entries(snap.items || {}).map(([k, val]) => `<div style="margin-bottom:12px"><b>${esc(k)}</b><pre style="white-space:pre-wrap;font-family:inherit;background:#f7f5f0;padding:10px;border-radius:4px;margin:4px 0">${esc(val)}</pre></div>`).join('')}
+      `);
+    }));
+
+    pane.querySelectorAll('[data-ticket-reply]').forEach(btn => btn.addEventListener('click', () => {
+      const t = tickets.find(x => x.id === btn.dataset.ticketReply);
+      if (!t) return;
+      openModal(`Xử lý khiếu nại: ${t.id}`, `
+        <form id="ticket-reply-form">
+          <p><b>Khách:</b> ${esc(t.email)} ${t.orderId ? `· <b>Đơn:</b> ${esc(t.orderId)}` : ''}</p>
+          <p><b>Nội dung:</b> ${esc(t.message)}</p>
+          <div class="form-group">
+            <label>Trạng thái xử lý</label>
+            <select class="form-control" name="status">
+              <option value="open" ${t.status === 'open' ? 'selected' : ''}>Mới tiếp nhận (open)</option>
+              <option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''}>Đang xác minh (in_progress)</option>
+              <option value="resolved" ${t.status === 'resolved' ? 'selected' : ''}>Đã giải quyết (resolved)</option>
+              <option value="closed" ${t.status === 'closed' ? 'selected' : ''}>Đã đóng (closed)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Phản hồi gửi khách hàng</label>
+            <textarea class="form-control" name="adminReply" rows="4" required>${esc(t.adminReply || '')}</textarea>
+          </div>
+          <button type="submit" class="btn btn-primary">Lưu phản hồi</button>
+        </form>
+      `);
+      document.getElementById('ticket-reply-form')?.addEventListener('submit', async e => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await B().adminActionRequest('PATCH', `/api/admin/support-tickets/${encodeURIComponent(t.id)}`, {
+            status: fd.get('status'),
+            adminReply: fd.get('adminReply'),
+          });
+          closeModal();
+          B().showToast('Đã cập nhật phản hồi khiếu nại!', 'success');
+        } catch (err) { B().showToast(err.message, 'danger'); }
+      });
+    }));
+
     document.getElementById('policies-form')?.addEventListener('submit', async e => {
       e.preventDefault();
       const fd = new FormData(e.target);
       const items = {};
-      for (const [k] of POLICY_KEYS) items[k] = String(fd.get(`item_${k}`) || '').trim();
+      const visibility = {};
+      for (const [k] of POLICY_KEYS) {
+        items[k] = String(fd.get(`item_${k}`) || '').trim();
+        visibility[k] = fd.get(`vis_${k}`) !== null;
+      }
       try {
         await B().adminActionRequest('PUT', '/api/admin/policies', {
-          storeInfo: { ...(pol.storeInfo || {}), name: String(fd.get('store_name') || '').trim(), phone: String(fd.get('store_phone') || '').trim() },
+          storeInfo: {
+            ...(pol.storeInfo || {}),
+            name: String(fd.get('store_name') || '').trim(),
+            hotline: String(fd.get('store_hotline') || '').trim() || 'Chưa cấu hình',
+            email: String(fd.get('store_email') || '').trim() || 'Chưa cấu hình',
+            address: String(fd.get('store_address') || '').trim() || 'Chưa cấu hình',
+            hours: String(fd.get('store_hours') || '').trim(),
+            social: String(fd.get('store_social') || '').trim() || 'Chưa cấu hình',
+          },
           banners: { ...(pol.banners || {}), notice: String(fd.get('banner_title') || '').trim() },
+          visibility,
           items,
           note: String(fd.get('note') || '').trim(),
         });

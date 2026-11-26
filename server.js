@@ -10,6 +10,7 @@ const { validateDatabaseV2 } = require('./schemas/database.schema');
 const { COLOR_CODE_MAP, ENUMS, ID_REGEX, buildSku } = require('./schemas/common.schema');
 const { migrateDatabaseFile } = require('./migrations/migrate-v1-to-v2');
 const { createAdminHandler } = require('./lib/admin-handlers');
+const { createCustomerOrderHandler, createHoldSweeper } = require('./lib/customer-order-handlers');
 
 const root = path.join(__dirname, 'dist');
 const dataDir = path.resolve(process.env.VIETPHUC_DATA_DIR || path.join(__dirname, 'data'));
@@ -66,6 +67,9 @@ const BUSINESS_CONFIG = Object.freeze({
   paymentFee: Number(process.env.VIETPHUC_PAYMENT_FEE || 0),
   onlineStockHoldMinutes: Number(process.env.VIETPHUC_ONLINE_HOLD_MINUTES || 15),
   returnWindowDays: Number(process.env.VIETPHUC_RETURN_WINDOW_DAYS || 7),
+  warrantyWindowDays: Number(process.env.VIETPHUC_WARRANTY_WINDOW_DAYS || 30),
+  refundProcessingDays: 5,
+  complaintResponseDays: 1,
   maxPromotionsPerOrder: 1,
 });
 
@@ -234,6 +238,26 @@ try {
     if (!check.valid) {
       throw new Error('Sai cấu trúc Schema V2: ' + check.errors.map(e => `${e.path}: ${e.message}`).join('; '));
     }
+    // Bổ sung các nhóm chính sách mới còn thiếu (không ghi đè nội dung Admin đã chỉnh sửa)
+    const defPol = seedData.policies || {};
+    const curPol = database.state.policies;
+    let polChanged = false;
+    if (!curPol.visibility || typeof curPol.visibility !== 'object') {
+      curPol.visibility = structuredClone(defPol.visibility || {});
+      polChanged = true;
+    }
+    if (defPol.storeInfo) {
+      for (const [k, v] of Object.entries(defPol.storeInfo)) {
+        if (curPol.storeInfo[k] === undefined) { curPol.storeInfo[k] = v; polChanged = true; }
+      }
+    }
+    if (defPol.items) {
+      for (const [k, v] of Object.entries(defPol.items)) {
+        if (curPol.items[k] === undefined) { curPol.items[k] = v; polChanged = true; }
+        if (curPol.visibility[k] === undefined) { curPol.visibility[k] = true; polChanged = true; }
+      }
+    }
+    if (polChanged) writeDatabase(database);
   }
 } catch (err) {
   console.error(`Không thể khởi tạo ${databasePath}: ${err.message}`);
@@ -455,6 +479,23 @@ const handleAdminRoutes = createAdminHandler({
   ID_REGEX,
 });
 
+const handleCustomerOrderRoutes = createCustomerOrderHandler({
+  sendJson,
+  parseJsonBody,
+  verifyWriteRequest,
+  requireCustomer,
+  runTransaction,
+  adjustStockWithLog,
+  getDatabase: () => database,
+  BUSINESS_CONFIG,
+});
+
+const sweepExpiredOnlineOrders = createHoldSweeper({
+  getDatabase: () => database,
+  runTransaction,
+  adjustStockWithLog,
+});
+
 // =========================================================
 // HTTP SERVER ROUTING
 // =========================================================
@@ -495,11 +536,35 @@ const server = http.createServer((req, res) => {
     for (const sku of activeSkus) {
       publicStock[sku] = s.stock[sku] ?? 0;
     }
+    const vis = (s.policies && s.policies.visibility) || {};
+    const publicItems = {};
+    for (const [k, v] of Object.entries((s.policies && s.policies.items) || {})) {
+      if (vis[k] !== false) publicItems[k] = v;
+    }
+    const nowMs = Date.now();
+    const publicPromotions = (s.promotions || [])
+      .filter(p => p.active && Date.parse(p.startAt) <= nowMs && Date.parse(p.endAt) >= nowMs && (p.usedCount || 0) < (p.usageLimit || 0))
+      .map(p => ({
+        code: p.code,
+        name: p.name || p.code,
+        description: p.description || '',
+        type: p.type,
+        value: p.value,
+        minOrder: p.minOrder || 0,
+        maxDiscount: p.maxDiscount ?? null,
+        startAt: p.startAt,
+        endAt: p.endAt,
+        remainingUses: Math.max(0, (p.usageLimit || 0) - (p.usedCount || 0)),
+      }));
     return sendJson(res, 200, {
       categories: activeCategories,
       products: activeProducts,
       stock: publicStock,
-      policies: s.policies,
+      policies: {
+        ...s.policies,
+        items: publicItems,
+      },
+      promotions: publicPromotions,
       siteContent: s.policies.banners || {},
       config: BUSINESS_CONFIG,
     });
@@ -762,6 +827,8 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
+
+  if (handleCustomerOrderRoutes(req, res, pathname) || res.writableEnded || res.headersSent) return;
 
   if (pathname === '/api/customer/orders') {
     if (req.method !== 'GET') return sendJson(res, 405, { error: 'method_not_allowed' });
@@ -1167,7 +1234,24 @@ const server = http.createServer((req, res) => {
   });
 });
 
+let sweepTimer = null;
+const sweepIntervalMs = Math.max(20, Number(process.env.VIETPHUC_SWEEP_INTERVAL_MS || 30000));
+
+function stopHoldSweeper() {
+  if (sweepTimer) {
+    clearInterval(sweepTimer);
+    sweepTimer = null;
+  }
+}
+
+server.on('close', stopHoldSweeper);
+process.once('SIGTERM', () => { stopHoldSweeper(); server.close(() => process.exit(0)); });
+process.once('SIGINT', () => { stopHoldSweeper(); server.close(() => process.exit(0)); });
+
 server.listen(port, host, () => {
   console.log(`Việt Phục đang chạy tại http://${host}:${server.address().port}`);
   console.log(`Dữ liệu JSON (Schema V2): ${databasePath}`);
+  sweepExpiredOnlineOrders();
+  sweepTimer = setInterval(() => { sweepExpiredOnlineOrders(); }, sweepIntervalMs);
+  if (typeof sweepTimer.unref === 'function') sweepTimer.unref();
 });

@@ -58,6 +58,9 @@ function validatePolicies(policies, err) {
   if (!isPlainObject(policies.storeInfo)) err.add('state.policies.storeInfo', 'storeInfo phải là object.');
   if (!isPlainObject(policies.banners)) err.add('state.policies.banners', 'banners phải là object.');
   if (!isPlainObject(policies.items)) err.add('state.policies.items', 'items phải là object.');
+  if (policies.visibility !== undefined && !isPlainObject(policies.visibility)) {
+    err.add('state.policies.visibility', 'visibility phải là object.');
+  }
 }
 
 function validatePolicyVersions(versions, err) {
