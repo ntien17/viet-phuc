@@ -15,7 +15,7 @@ const document={
 };
 const storage={getItem(){return null;},setItem(){}};
 class FormDataMock {constructor(form){this.values=form.values||{};} getAll(key){return this.values[key]||[];} get(key){return (this.values[key]||[])[0]||null;}}
-const ctx={document,window:{},localStorage:storage,sessionStorage:storage,FormData:FormDataMock,Intl,console,setTimeout(){},clearTimeout(){}};
+const ctx={document,window:{scrollY:0,scrollTo(_x,y){this.scrollY=y;}},localStorage:storage,sessionStorage:storage,FormData:FormDataMock,Intl,console,setTimeout(){},clearTimeout(){}};
 vm.runInNewContext(fs.readFileSync('dist/app.js','utf8'),ctx,{filename:'app.js'});
 const api=ctx.window.VietPhuc;
 function idsShown(){return [...new Set([...ids['product-grid'].innerHTML.matchAll(/data-action="product" data-id="([^"]+)"/g)].map(m=>m[1]))];}
