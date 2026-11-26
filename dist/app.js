@@ -126,7 +126,7 @@
   let filters={sizes:[],colors:[],prices:[]};
   const colorsFor=p=>{const vs=Array.isArray(p?.variants)?p.variants.filter(v=>v.active!==false):[];return vs.length?[...new Set(vs.map(v=>v.color))]:(p?.color?[p.color]:[]);};
   const sizesFor=(p,color)=>{const vs=Array.isArray(p?.variants)?p.variants.filter(v=>v.active!==false&&(!color||v.color===color)):[];return vs.length?[...new Set(vs.map(v=>v.size))]:(p?.sizes || ['S','M','L','XL']);};
-  const colors={'Đỏ trầm':'#80252c','Trắng ngà':'#f3eee2','Nâu đất':'#805d48','Hồng sen':'#dd8a99','Đen':'#242424','Hồng phấn':'#eac5c9','Xanh nhạt':'#a9c9cb'};
+  const colors={'Đỏ':'#b91c1c','Đen':'#242424','Trắng':'#ffffff','Đỏ trầm':'#80252c','Trắng ngà':'#f3eee2','Nâu đất':'#805d48','Hồng sen':'#dd8a99','Hồng phấn':'#eac5c9','Xanh nhạt':'#a9c9cb','Xanh rêu':'#4b5d46'};
   const priceRanges=[['under500','Dưới 500.000đ',0,500000],['500to1m','500.000đ - 1.000.000đ',500000,1000000],['1to2m','1.000.000đ - 2.000.000đ',1000000,2000000],['2to3m','2.000.000đ - 3.000.000đ',2000000,3000000],['over3m','Từ 3.000.000đ',3000000,Infinity]];
   // Ngày thêm minh họa của dữ liệu sản phẩm trong bản trình diễn.
   const addedDates=['2026-01-10','2026-03-14','2026-02-02','2026-04-05','2026-01-21','2026-02-25','2026-05-12','2026-06-08','2026-07-01'];
@@ -145,11 +145,15 @@
   function updateCount(){document.querySelectorAll('#cart-count,[data-cart-count]').forEach(x=>x.textContent=cartCount());}
   function renderProducts(){
     const grid=document.getElementById('product-grid'); if(!grid) return;
-    let list=products.filter(p=>(category==='Tất cả'||p.category===category)
-      && p.name.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi'))
-      && (!filters.sizes.length || filters.sizes.some(s=>sizesFor(p).includes(s)&&available(p.id,s)>0))
-      && (!filters.colors.length || filters.colors.includes(p.color))
-      && (!filters.prices.length || priceRanges.some(([id,,min,max])=>filters.prices.includes(id)&&p.price>=min&&p.price<max)));
+    let list=products.filter(p=>{
+      const pColors=colorsFor(p);
+      const matchedColors=filters.colors.length?pColors.filter(c=>filters.colors.includes(c)):pColors;
+      return (category==='Tất cả'||p.category===category)
+        && p.name.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi'))
+        && matchedColors.length>0
+        && (!filters.sizes.length || filters.sizes.some(s=>matchedColors.some(c=>sizesFor(p,c).includes(s)&&available(p.id,s,c)>0)))
+        && (!filters.prices.length || priceRanges.some(([id,,min,max])=>filters.prices.includes(id)&&p.price>=min&&p.price<max));
+    });
     if(sort==='price-asc') list.sort((a,b)=>a.price-b.price);
     if(sort==='price-desc') list.sort((a,b)=>b.price-a.price);
     if(sort==='newest') list.sort((a,b)=>String(b.addedAt||'').localeCompare(String(a.addedAt||'')));
@@ -198,7 +202,7 @@
   const toast=msg=>{document.querySelector('.vp-toast')?.remove();let t=document.createElement('div');t.className='vp-toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);};
   let savedScrollY=null;
   function lockBodyScroll(){if(savedScrollY===null)savedScrollY=window.scrollY||0;document.body.style.overflow='hidden';}
-  function unlockBodyScroll(){if(!document.querySelector('.vp-overlay')&&!document.querySelector('.vp-policy-overlay')){document.body.style.overflow='';if(savedScrollY!==null){const y=savedScrollY;savedScrollY=null;if(window.scrollY!==y)window.scrollTo(0,y);}}}
+  function unlockBodyScroll(){if(!document.querySelector('.vp-overlay')&&!document.querySelector('.vp-policy-overlay')){document.body.style.overflow='';if(savedScrollY!==null){const y=savedScrollY;savedScrollY=null;if(window.scrollY!==y&&typeof window.scrollTo==='function')window.scrollTo(0,y);}}}
   function modal(title,body,center=false){document.querySelector('.vp-overlay')?.remove();let el=document.createElement('div');el.className='vp-overlay'+(center?' center':'');el.innerHTML=`<section class="vp-panel" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="vp-head"><h2>${esc(title)}</h2><button class="vp-close" data-action="close" aria-label="Đóng">×</button></div>${body}</section>`;document.body.appendChild(el);lockBodyScroll();}
   function closePolicyDrawer(){const ov=document.querySelector('.vp-policy-overlay');if(ov){ov.remove();}unlockBodyScroll();}
   function close(){document.querySelector('.vp-overlay')?.remove();document.querySelector('.vp-policy-overlay')?.remove();unlockBodyScroll();}
@@ -569,7 +573,6 @@
           <label>Họ và tên người nhận *</label><input name="receiver" required value="${esc(state.user.name||'')}">
           <label>Số điện thoại nhận hàng *</label><input name="phone" type="tel" required value="${esc(state.user.phone||'')}" placeholder="0912345678">
           <label>Tỉnh / Thành phố *</label><input name="province" required placeholder="Ví dụ: TP. Hồ Chí Minh, Hà Nội...">
-          <label>Quận / Huyện</label><input name="district" placeholder="Quận/Huyện (tùy chọn)">
           <label>Địa chỉ cụ thể *</label><input name="address" required value="${esc(state.user.defaultAddress||'')}" placeholder="Số nhà, tên đường, phường/xã">
           <label>Ghi chú đơn hàng</label><input name="note" placeholder="Ghi chú giao hàng (không bắt buộc)">
           <label>Phương thức vận chuyển</label>
@@ -649,7 +652,6 @@
           receiver:String(data.get('receiver')||'').trim(),
           phone:String(data.get('phone')||'').trim(),
           province:String(data.get('province')||'').trim(),
-          district:String(data.get('district')||'').trim(),
           address:String(data.get('address')||'').trim(),
           note:String(data.get('note')||'').trim(),
           shippingType:String(data.get('shippingType')||'standard'),
