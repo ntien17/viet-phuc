@@ -1010,10 +1010,11 @@
   }
   function adminOrder(id){const o=state.orders.find(x=>x.id===id);if(!o)return;modal('Xử lý '+o.id,`<div class="vp-body">${orderCard(o,true,true)}${o.cancellation ? cancellationSection(o,true) : ''}${supportSection(o,true)}<div class="vp-line"></div><p><b>Cập nhật đơn & vận chuyển</b></p><div class="vp-inline-actions">${o.status==='Chờ xác nhận'?`<button class="vp-btn" data-action="order-step" data-id="${id}" data-step="confirm">Xác nhận đơn</button>`:''}${o.status==='Đã xác nhận'&&!cancellationPending(o)?`<button class="vp-btn" data-action="order-step" data-id="${id}" data-step="ship">Bàn giao vận chuyển</button>`:''}${o.status==='Đang giao'?`<button class="vp-btn" data-action="order-step" data-id="${id}" data-step="delivered">Giao thành công</button><button class="vp-btn secondary" data-action="order-step" data-id="${id}" data-step="failed">Giao thất bại</button>`:''}</div>${o.returnStatus&&o.returnStatus!=='Đã hoàn tất'?`<div class="vp-line"></div>${returnSummary(o)}${o.status==='Đã giao'?`<button class="vp-btn" data-action="complete-return" data-id="${id}">${o.returnExchange?'XÁC NHẬN ĐÃ ĐỔI SIZE':'XÁC NHẬN HOÀN TẤT VÀ NHẬP LẠI HÀNG'}</button>`:'<p>Yêu cầu đang chờ xử lý. Chỉ nhập lại hàng sau khi đơn đã giao và nhận lại sản phẩm.</p>'}`:''}${o.status==='Đã giao'&&o.payment==='COD'?`<div class="vp-line"></div><p>Đối soát COD: ${esc(o.settlement||'Chưa đối soát')}</p><button class="vp-btn secondary" data-action="settle" data-id="${id}">GHI NHẬN ĐÃ THỰC NHẬN</button>`:''}<button class="vp-btn secondary vp-full" data-action="admin-tab" data-tab="orders">QUAY LẠI DANH SÁCH</button></div>`);}
   function showContactInfo() {
+    const shortcuts = document.querySelector('.contact-shortcuts');
+    const socialLinks = Array.from(shortcuts.querySelectorAll('[data-social]'), link => link.outerHTML).join('');
+    const email = shortcuts.querySelector('a[href^="mailto:"]');
+    const hotline = shortcuts.querySelector('a[href^="tel:"]');
     const info = publicPolicies?.storeInfo || {};
-    const phone = info.phone || 'Chưa cập nhật';
-    const email = info.email || 'Chưa cập nhật';
-    const hours = info.supportHours || 'Thứ 2 – Thứ 7, 08:00 – 17:00';
     modal('LIÊN HỆ VỚI CHÚNG TÔI', `<div class="vp-body contact-details">
       <section class="contact-card">
         <h3>VIỆT PHỤC</h3>
@@ -1022,14 +1023,26 @@
       </section>
       <section class="contact-card">
         <h3>THÔNG TIN LIÊN HỆ</h3>
-        <dl><dt>Hotline</dt><dd>${info.phone ? `<a href="tel:${esc(info.phone)}">${esc(phone)}</a>` : esc(phone)}</dd>
-          <dt>Email</dt><dd>${info.email ? `<a href="mailto:${esc(info.email)}">${esc(email)}</a>` : esc(email)}</dd>
-          <dt>Thời gian làm việc</dt><dd>${esc(hours)}</dd></dl>
+        <dl><dt>Hotline</dt><dd>${info.hotline && !/^[+\d][\d .()-]*$/.test(info.hotline) ? esc(info.hotline) : `<a href="${esc(info.hotline ? 'tel:' + info.hotline : hotline.href)}">${esc(info.hotline || '0901 234 567')}</a>`}</dd>
+          <dt>Email</dt><dd>${info.email && !info.email.includes('@') ? esc(info.email) : `<a href="${esc(info.email ? 'mailto:' + info.email : email.href)}">${esc(info.email || 'support@vietphuc.vn')}</a>`}</dd>
+          <dt>Địa chỉ</dt><dd>${esc(info.address || 'Buôn Ma Thuột, Đắk Lắk')}</dd>
+          <dt>Thời gian làm việc</dt><dd>${esc(info.hours || 'Thứ 2 - Thứ 7, 08:00 - 17:00')}</dd></dl>
+      </section>
+      <section class="contact-card"><h3>KÊNH MẠNG XÃ HỘI</h3>
+        <div class="contact-grid">${socialLinks}</div>
       </section>
       <section class="contact-card"><h3>HỖ TRỢ KHÁCH HÀNG</h3>
         <ul><li>Tư vấn sản phẩm</li><li>Hướng dẫn chọn size</li><li>Kiểm tra đơn hàng</li>
           <li>Thanh toán đơn hàng</li><li>Đổi trả và hoàn tiền</li><li>Hỗ trợ khiếu nại</li>
           <li>Tư vấn sử dụng và bảo quản sản phẩm</li></ul>
+      </section>
+      <section class="contact-card"><h3>GỬI PHẢN HỒI NHANH</h3>
+        <form class="contact-form" data-form="contact-feedback">
+          <label>Họ và tên<input name="name" autocomplete="name" required></label>
+          <label>Email<input name="email" type="email" autocomplete="email" required></label>
+          <label>Nội dung<textarea name="message" rows="4" required></textarea></label>
+          <button type="submit" class="vp-btn">GỬI PHẢN HỒI</button>
+        </form>
       </section>
     </div>`);
     document.querySelector('.vp-overlay .vp-close')?.focus();
