@@ -1254,6 +1254,8 @@
     const vis = pol.visibility || {};
     const versions = (s.policyVersions || []).slice().reverse();
     const tickets = (s.supportTickets || []).slice().reverse();
+    const feedbacks = tickets.filter(t => t.source === 'contact_feedback');
+    const orderTickets = tickets.filter(t => t.source !== 'contact_feedback');
     const pane = document.getElementById('pane-policies');
     if (!pane) return;
 
@@ -1311,7 +1313,33 @@
       <div class="card">
         <div class="card-header">
           <div class="card-title-wrap">
-            <h3 class="card-title">Khiếu nại & Hỗ trợ khách hàng (${tickets.length})</h3>
+            <h3 class="card-title">Phản hồi nhanh từ Storefront (${feedbacks.length})</h3>
+            <span class="card-subtitle">Tiếp nhận tự động từ form Gửi phản hồi nhanh ở Footer và Popup Liên hệ.</span>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="admin-table">
+            <thead><tr><th>Mã</th><th>Người gửi</th><th>Nội dung phản hồi</th><th>Trạng thái</th><th>Phản hồi / Ghi chú Admin</th><th class="text-right">Xử lý</th></tr></thead>
+            <tbody>
+              ${feedbacks.length ? feedbacks.map(t => `
+                <tr>
+                  <td><span class="order-code">${esc(t.id)}</span><br><small>${esc(formatDate(t.createdAt))}</small></td>
+                  <td><b>${esc(t.senderName || 'Khách')}</b><br><small>${esc(t.email)}</small></td>
+                  <td><small>${esc(t.message)}</small></td>
+                  <td>${getStatusBadgeHtml(t.status)}</td>
+                  <td><small>${esc(t.adminReply || 'Chưa phản hồi')}</small></td>
+                  <td class="text-right"><button type="button" class="btn btn-primary btn-sm" data-ticket-reply="${esc(t.id)}">Phản hồi / Cập nhật</button></td>
+                </tr>
+              `).join('') : '<tr><td colspan="6" class="text-center" style="padding:18px">Chưa có phản hồi nhanh nào từ Storefront.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-wrap">
+            <h3 class="card-title">Khiếu nại & Hỗ trợ khách hàng (${orderTickets.length})</h3>
             <span class="card-subtitle">Mục tiêu phản hồi tiếp nhận: 01 ngày làm việc. Lưu lịch sử phản hồi tại supportTickets.</span>
           </div>
         </div>
@@ -1319,7 +1347,7 @@
           <table class="admin-table">
             <thead><tr><th>Mã</th><th>Khách hàng / Đơn</th><th>Tiêu đề & Nội dung</th><th>Trạng thái</th><th>Phản hồi Admin</th><th class="text-right">Xử lý</th></tr></thead>
             <tbody>
-              ${tickets.length ? tickets.map(t => `
+              ${orderTickets.length ? orderTickets.map(t => `
                 <tr>
                   <td><span class="order-code">${esc(t.id)}</span><br><small>${esc(formatDate(t.createdAt))}</small></td>
                   <td>${esc(t.email)}${t.orderId ? `<br><span class="order-code">${esc(t.orderId)}</span>` : ''}</td>

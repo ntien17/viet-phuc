@@ -24,11 +24,22 @@
     {id:'p9',name:'Mấn gấm đỏ truyền thống',category:'Phụ kiện',price:320000,color:'Đỏ trầm',material:'Gấm',tag:'MỚI',img:'assets/accessory.png',sizes:['One Size']}
   ];
   const initial = () => ({cart:[],orders:[],user:null,stock:{},visits:0,cartEvents:0});
+  const cartStorageKey = uid => (uid ? `vietphuc-cart-${uid}` : 'vietphuc-cart-guest');
+  function loadCartForUser(uid) {
+    if (!serverMode) return;
+    try {
+      const raw = JSON.parse(localStorage.getItem(cartStorageKey(uid)) || '[]');
+      state.cart = Array.isArray(raw) ? raw : [];
+    } catch (_) {
+      state.cart = [];
+    }
+  }
   let state;
   try { state = {...initial(), ...JSON.parse(localStorage.getItem(KEY) || '{}')}; } catch (_) {state=initial();}
   state.stock ||= {}; state.orders ||= []; state.cart ||= [];
+  if (serverMode) loadCartForUser(state.user?.id || null);
   if (!serverMode && !sessionStorage.getItem('vietphuc-visit')) { state.visits = (state.visits || 0) + 1; sessionStorage.setItem('vietphuc-visit','1'); }
-  const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(serverMode ? {cart:state.cart,user:state.user} : state));}catch(e){console.warn('Không lưu được dữ liệu demo',e);}};
+  const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(serverMode ? {user:state.user} : state));if(serverMode)localStorage.setItem(cartStorageKey(state.user?.id||null),JSON.stringify(state.cart));}catch(e){console.warn('Không lưu được dữ liệu demo',e);}};
   save();
   let dbReady=!serverMode, dbBusy=false, publicPolicies=null, publicPromotions=[], businessConfig={shipping:{standardFee:30000,remoteFee:45000},returnWindowDays:7,warrantyWindowDays:30,refundProcessingDays:5,complaintResponseDays:1};
   function mapPublicProduct(p, catMap){
@@ -100,20 +111,43 @@
       if(btn)btn.title='Tài khoản';
     }
   }
-  async function syncCustomerSession(){
-    if(!serverMode)return;
-    try{
-      const data=await apiCustomer('/api/customer/session');
-      state.user=data.loggedIn&&data.customer?data.customer:null;
-    }catch(_){
-      state.user=null;
+  function setCustomerUser(nextUser) {
+    const prevId = state.user?.id || null;
+    const nextId = nextUser?.id || null;
+    state.user = nextUser || null;
+    if (serverMode && prevId !== nextId) {
+      loadCartForUser(nextId);
+      save();
+      updateCount();
     }
     updateAccountIndicator();
+  }
+  async function syncCustomerSession(){
+    if(!serverMode)return;
+    let nextUser=null;
+    try{
+      const data=await apiCustomer('/api/customer/session');
+      nextUser=data.loggedIn&&data.customer?data.customer:null;
+    }catch(_){
+      nextUser=null;
+    }
+    setCustomerUser(nextUser);
+  }
+  let storefrontEvents=null, storefrontSseTimer=null;
+  function connectStorefrontEvents(){
+    if(!serverMode||storefrontEvents||typeof EventSource==='undefined')return;
+    storefrontEvents=new EventSource('/api/public/events');
+    storefrontEvents.addEventListener('db_update',()=>{
+      if(storefrontSseTimer)clearTimeout(storefrontSseTimer);
+      storefrontSseTimer=setTimeout(async()=>{
+        try{await refreshDatabase();renderProducts();}catch(_){}
+      },300);
+    });
   }
   async function initializeDatabase(){
     if(!serverMode)return;
 
-    try{const result=await readDatabase();applyPublicBootstrap(result);await syncCustomerSession();dbReady=true;;if(!sessionStorage.getItem('vietphuc-json-visit')){await trackPublic('visit');sessionStorage.setItem('vietphuc-json-visit','1');}}
+    try{const result=await readDatabase();applyPublicBootstrap(result);await syncCustomerSession();dbReady=true;connectStorefrontEvents();if(!sessionStorage.getItem('vietphuc-json-visit')){await trackPublic('visit');sessionStorage.setItem('vietphuc-json-visit','1');}}
     catch(error){dbReady=false;status('Không kết nối được máy chủ. Hãy chạy npm start rồi tải lại trang.',true);}
   }
   async function refreshDatabase(){
@@ -1014,6 +1048,7 @@
     const phone = info.phone || 'Chưa cập nhật';
     const email = info.email || 'Chưa cập nhật';
     const hours = info.supportHours || 'Thứ 2 – Thứ 7, 08:00 – 17:00';
+    const socialHtml = document.querySelector('.footer-social')?.outerHTML || '';
     modal('LIÊN HỆ VỚI CHÚNG TÔI', `<div class="vp-body contact-details">
       <section class="contact-card">
         <h3>VIỆT PHỤC</h3>
@@ -1026,10 +1061,19 @@
           <dt>Email</dt><dd>${info.email ? `<a href="mailto:${esc(info.email)}">${esc(email)}</a>` : esc(email)}</dd>
           <dt>Thời gian làm việc</dt><dd>${esc(hours)}</dd></dl>
       </section>
+      ${socialHtml ? `<section class="contact-card"><h3>KÊNH MẠNG XÃ HỘI</h3>${socialHtml}<p class="footer-contact-note">Liên kết mạng xã hội đang được cập nhật.</p></section>` : ''}
       <section class="contact-card"><h3>HỖ TRỢ KHÁCH HÀNG</h3>
         <ul><li>Tư vấn sản phẩm</li><li>Hướng dẫn chọn size</li><li>Kiểm tra đơn hàng</li>
           <li>Thanh toán đơn hàng</li><li>Đổi trả và hoàn tiền</li><li>Hỗ trợ khiếu nại</li>
           <li>Tư vấn sử dụng và bảo quản sản phẩm</li></ul>
+      </section>
+      <section class="contact-card"><h3>GỬI PHẢN HỒI NHANH</h3>
+        <form class="contact-form" data-form="contact-feedback">
+          <label>Họ và tên<input name="name" autocomplete="name" required></label>
+          <label>Email<input name="email" type="email" autocomplete="email" required></label>
+          <label>Nội dung<textarea name="message" rows="4" required></textarea></label>
+          <button type="submit" class="vp-btn">GỬI PHẢN HỒI</button>
+        </form>
       </section>
     </div>`);
     document.querySelector('.vp-overlay .vp-close')?.focus();
@@ -1066,7 +1110,7 @@
     if(action==='customer-tab'){account(el.dataset.tab);return;}
     if(action==='customer-order-detail'){loadCustomerOrderDetail(el.dataset.id);return;}
     if(action==='toggle-pw'){const inp=el.previousElementSibling;if(inp){const show=inp.type==='password';inp.type=show?'text':'password';el.textContent=show?'Ẩn':'Hiện';}return;}
-    if(action==='customer-logout'){try{await apiCustomer('/api/customer/logout','POST');}catch(_){}state.user=null;checkoutPromoCode='';checkoutQuote=null;save();updateAccountIndicator();toast('Đã đăng xuất.');account('login');return;}
+    if(action==='customer-logout'){try{await apiCustomer('/api/customer/logout','POST');}catch(_){}checkoutPromoCode='';checkoutQuote=null;setCustomerUser(null);toast('Đã đăng xuất.');account('login');return;}
     if(action==='open-search'){modal('Tìm kiếm',`<div class="vp-body"><form class="vp-form" data-form="search"><label>Bạn đang tìm kiếm điều gì?</label><input name="query" value="${esc(search)}" placeholder="Tên sản phẩm, danh mục (có hoặc không dấu)..." autofocus><button class="vp-btn vp-full">TÌM KIẾM</button></form><div class="vp-search-suggestions" id="vp-search-suggestions">${searchSuggestions(search)}</div></div>`);return;}
     if(action==='search-category'){showSearchResults('',el.dataset.name);return;}
     if(action==='qty'){const i=state.cart[+el.dataset.index];if(!i)return;let n=i.qty+(+el.dataset.delta);if(n<1)state.cart.splice(+el.dataset.index,1);else if(n<=available(i.id,i.size,i.color))i.qty=n;else toast('Số lượng vượt quá tồn kho.');save();updateCount();cart();return;}
@@ -1153,8 +1197,33 @@
       return;
     }
     if (type === 'contact-feedback') {
-      form.reset();
-      toast('Chúng tôi đã nhận được phản hồi của bạn.');
+      const name = String(data.get('name') || '').trim();
+      const email = String(data.get('email') || '').trim();
+      const message = String(data.get('message') || '').trim();
+      if (!serverMode) {
+        form.reset();
+        form.closest('details')?.removeAttribute('open');
+        toast('Chúng tôi đã nhận được phản hồi của bạn.');
+        return;
+      }
+      const btn = form.querySelector('button[type="submit"]');
+      if (btn) btn.disabled = true;
+      try {
+        const res = await fetch('/api/public/contact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-VP-Requested': '1' },
+          body: JSON.stringify({ name, email, message }),
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(payload.message || 'Không thể gửi phản hồi lúc này.');
+        form.reset();
+        form.closest('details')?.removeAttribute('open');
+        toast('Đã gửi phản hồi tới cửa hàng. Cảm ơn bạn!');
+      } catch (err) {
+        toast(err.message);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
       return;
     }
     if(type==='customer-checkout'){
@@ -1198,7 +1267,7 @@
       const email=String(data.get('email')||'').trim().toLowerCase(),password=String(data.get('password')||'');
       try{
         const res=await apiCustomer('/api/customer/login','POST',{email,password});
-        state.user=res.customer;updateAccountIndicator();toast('Đăng nhập thành công.');account('profile');
+        setCustomerUser(res.customer);toast('Đăng nhập thành công.');account('profile');
       }catch(err){account('login',err.message);}
       return;
     }
@@ -1208,7 +1277,7 @@
       if(password!==confirmPassword){account('register','Xác nhận mật khẩu không khớp.');return;}
       try{
         const res=await apiCustomer('/api/customer/register','POST',{name,email,phone,password});
-        state.user=res.customer;updateAccountIndicator();toast('Đăng ký tài khoản thành công.');account('profile');
+        setCustomerUser(res.customer);toast('Đăng ký tài khoản thành công.');account('profile');
       }catch(err){account('register',err.message);}
       return;
     }
@@ -1226,7 +1295,7 @@
       if(newPassword!==confirmNewPassword){account('password','Xác nhận mật khẩu mới không khớp.');return;}
       try{
         const res=await apiCustomer('/api/customer/change-password','PUT',{currentPassword,newPassword});
-        state.user=null;updateAccountIndicator();toast(res.message||'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.');account('login');
+        setCustomerUser(null);toast(res.message||'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.');account('login');
       }catch(err){account(err.status===401&&err.code!=='invalid_current_password'?'login':'password',err.message);}
       return;
     }

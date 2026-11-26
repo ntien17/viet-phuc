@@ -261,7 +261,32 @@
     }
   }
 
+  let adminEventSource = null;
+  let adminSseTimer = null;
+
+  function disconnectAdminEvents() {
+    if (adminSseTimer) { clearTimeout(adminSseTimer); adminSseTimer = null; }
+    if (adminEventSource) { adminEventSource.close(); adminEventSource = null; }
+  }
+
+  function connectAdminEvents() {
+    if (adminEventSource || typeof EventSource === 'undefined') return;
+    adminEventSource = new EventSource('/api/admin/events');
+    adminEventSource.addEventListener('db_update', e => {
+      try {
+        const data = JSON.parse(e.data || '{}');
+        if (typeof data.revision === 'number' && data.revision === dbRevision) return;
+      } catch (_) {}
+      if (isSaving) return;
+      if (adminSseTimer) clearTimeout(adminSseTimer);
+      adminSseTimer = setTimeout(() => {
+        if (!isSaving && currentAdmin) loadDatabase();
+      }, 200);
+    });
+  }
+
   async function logout() {
+    disconnectAdminEvents();
     try {
       await fetch('/api/admin/logout', { method: 'POST', headers: { 'X-VP-Requested': '1' } });
     } catch (_) {}
@@ -273,6 +298,7 @@
   }
 
   function showAuthView() {
+    disconnectAdminEvents();
     document.getElementById('auth-view').style.display = 'flex';
     document.getElementById('dashboard-view').style.display = 'none';
   }
@@ -280,6 +306,7 @@
   function showDashboardView() {
     document.getElementById('auth-view').style.display = 'none';
     document.getElementById('dashboard-view').style.display = 'flex';
+    connectAdminEvents();
   }
 
   // CSDL State Sync qua Admin API

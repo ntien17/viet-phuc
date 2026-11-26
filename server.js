@@ -303,6 +303,7 @@ function runTransaction(expectedRevision, mutateFn) {
 
     writeDatabase(next);
     database = next;
+    broadcastSse(database.revision);
     return { revision: database.revision, state: database.state, result };
   });
 
@@ -590,6 +591,60 @@ const server = http.createServer((req, res) => {
       }
     });
     return;
+  }
+
+  if (pathname === '/api/public/contact') {
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
+    if (!verifyWriteRequest(req, res)) return;
+    const rl = checkRateLimit(publicContactRateLimit, clientIp(req), 10, 60 * 1000);
+    if (!rl.ok) {
+      return sendJson(res, 429, { error: 'rate_limited', message: 'Bạn gửi phản hồi quá nhanh. Vui lòng thử lại sau ít phút.' });
+    }
+    parseJsonBody(req, async (err, body) => {
+      if (err) return sendJson(res, err.code, { error: err.error });
+      const name = String(body?.name || '').trim();
+      const email = String(body?.email || '').trim().toLowerCase();
+      const message = String(body?.message || '').trim();
+      if (name.length < 2 || name.length > 100) {
+        return sendJson(res, 400, { error: 'invalid_name', message: 'Họ và tên cần từ 2 đến 100 ký tự.' });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200) {
+        return sendJson(res, 400, { error: 'invalid_email', message: 'Email không hợp lệ.' });
+      }
+      if (message.length < 5 || message.length > 2000) {
+        return sendJson(res, 400, { error: 'invalid_message', message: 'Nội dung phản hồi cần từ 5 đến 2000 ký tự.' });
+      }
+      try {
+        const txRes = await runTransaction(null, draft => {
+          const now = new Date().toISOString();
+          const ticket = {
+            id: 'fb_' + crypto.randomBytes(6).toString('hex'),
+            customerId: null,
+            orderId: null,
+            source: 'contact_feedback',
+            senderName: name,
+            email,
+            subject: `Phản hồi nhanh từ ${name}`.slice(0, 200),
+            message,
+            status: 'open',
+            adminReply: '',
+            createdAt: now,
+            updatedAt: now,
+          };
+          draft.supportTickets.push(ticket);
+          return ticket;
+        });
+        return sendJson(res, 201, { ok: true, ticketId: txRes.result.id });
+      } catch (e) {
+        return sendJson(res, e.statusCode || 500, { error: e.code || 'contact_failed', message: e.message });
+      }
+    });
+    return;
+  }
+
+  if (pathname === '/api/public/events') {
+    if (req.method !== 'GET') return sendJson(res, 405, { error: 'method_not_allowed' });
+    return openSseStream(req, res, publicSseClients);
   }
 
   // -------------------------------------------------------
@@ -960,6 +1015,12 @@ const server = http.createServer((req, res) => {
     return sendJson(res, 200, { revision: database.revision, state: sanitizeAdminState(database.state), config: BUSINESS_CONFIG });
   }
 
+  if (pathname === '/api/admin/events') {
+    if (req.method !== 'GET') return sendJson(res, 405, { error: 'method_not_allowed' });
+    if (!requireAdmin(req, res)) return;
+    return openSseStream(req, res, adminSseClients);
+  }
+
   // Cập nhật trạng thái đơn hàng
   const orderStatusMatch = pathname.match(/^\/api\/admin\/orders\/([^/]+)\/status$/);
   if (orderStatusMatch) {
@@ -1234,10 +1295,62 @@ const server = http.createServer((req, res) => {
   });
 });
 
+const adminSseClients = new Set();
+const publicSseClients = new Set();
+const publicContactRateLimit = new Map();
+
+function openSseStream(req, res, clientSet) {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  res.write(`event: connected\ndata: ${JSON.stringify({ revision: database.revision })}\n\n`);
+  const keepalive = setInterval(() => {
+    try { res.write(': keepalive\n\n'); } catch (_) {}
+  }, 25000);
+  if (typeof keepalive.unref === 'function') keepalive.unref();
+  const entry = { res, keepalive };
+  clientSet.add(entry);
+  const cleanup = () => {
+    clearInterval(keepalive);
+    clientSet.delete(entry);
+  };
+  req.on('close', cleanup);
+  res.on('error', cleanup);
+}
+
+function broadcastSse(revision) {
+  const payload = `event: db_update\ndata: ${JSON.stringify({ revision })}\n\n`;
+  for (const set of [adminSseClients, publicSseClients]) {
+    for (const entry of set) {
+      try {
+        entry.res.write(payload);
+      } catch (_) {
+        clearInterval(entry.keepalive);
+        set.delete(entry);
+      }
+    }
+  }
+}
+
+function closeAllSse() {
+  for (const set of [adminSseClients, publicSseClients]) {
+    for (const entry of set) {
+      clearInterval(entry.keepalive);
+      try { entry.res.end(); } catch (_) {}
+    }
+    set.clear();
+  }
+}
+
 let sweepTimer = null;
 const sweepIntervalMs = Math.max(20, Number(process.env.VIETPHUC_SWEEP_INTERVAL_MS || 30000));
 
 function stopHoldSweeper() {
+  closeAllSse();
   if (sweepTimer) {
     clearInterval(sweepTimer);
     sweepTimer = null;
