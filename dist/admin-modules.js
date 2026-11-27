@@ -430,7 +430,7 @@
         <select class="form-control v-color">${ALLOWED_COLORS.map(c => `<option value="${esc(c)}" ${v.color === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
         <input class="form-control v-size" value="${esc(v.size || '')}" placeholder="Size (S, M, One Size)" required>
         <input class="form-control v-price" type="number" min="0" value="${v.priceOverride ?? ''}" placeholder="Giá riêng (tùy chọn)">
-        <input class="form-control v-stock" type="number" min="0" value="${isExisting ? (stock[v.sku] ?? 0) : (v.initialStock ?? 0)}" ${isExisting ? 'readonly disabled title="Điều chỉnh ở tab Tồn kho"' : 'placeholder="Tồn đầu"'}>
+        <input class="form-control v-stock" type="number" min="0" value="${isExisting ? (stock[v.sku] ?? 0) : (v.initialStock ?? 0)}" placeholder="Tồn kho">
         <button type="button" class="btn btn-outline btn-sm v-del">✕</button>
       </div>`;
 
@@ -454,7 +454,7 @@
         <div class="form-group"><label><input type="checkbox" name="active" ${prod ? (prod.active ? 'checked' : '') : 'checked'}> Đang kinh doanh</label> &nbsp; <label><input type="checkbox" name="featured" ${prod?.featured ? 'checked' : ''}> Nổi bật</label></div>
         <div class="form-group">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <label style="margin:0">Biến thể (Màu / Size / Giá riêng / Tồn ban đầu)</label>
+            <label style="margin:0">Biến thể (Màu / Size / Giá riêng / Tồn kho)</label>
             <button type="button" class="btn btn-outline btn-sm" id="btn-add-variant">+ Thêm biến thể</button>
           </div>
           <div id="variant-rows">${variants.map(v => variantRowHtml(v, Boolean(prod && v.sku))).join('')}</div>
@@ -480,6 +480,7 @@
         color: row.querySelector('.v-color').value,
         size: row.querySelector('.v-size').value.trim(),
         priceOverride: row.querySelector('.v-price').value ? Number(row.querySelector('.v-price').value) : null,
+        stock: Number(row.querySelector('.v-stock').value || 0),
         initialStock: Number(row.querySelector('.v-stock').value || 0),
         active: true,
       }));
@@ -539,6 +540,7 @@
               <option value="low">Sắp hết (&lt; 3)</option>
               <option value="out">Hết hàng (0)</option>
             </select>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-open-restock">+ Nhập thêm hàng</button>
           </div>
         </div>
         <div class="table-responsive">
@@ -600,12 +602,319 @@
           </td>
         </tr>
       `).join('');
-      tbody.querySelectorAll('[data-sku-adj]').forEach(btn => btn.addEventListener('click', () => openStockModal(btn.dataset.skuAdj, btn.dataset.mode)));
+      tbody.querySelectorAll('[data-sku-adj]').forEach(btn => btn.addEventListener('click', () => {
+        if (btn.dataset.mode === 'in') openRestockModal(btn.dataset.skuAdj);
+        else openStockModal(btn.dataset.skuAdj, btn.dataset.mode);
+      }));
     };
 
     drawInv();
     document.getElementById('inv-search')?.addEventListener('input', drawInv);
     document.getElementById('inv-filter')?.addEventListener('change', drawInv);
+    document.getElementById('btn-open-restock')?.addEventListener('click', () => openRestockModal(''));
+  }
+
+  function openRestockModal(initialSku = '') {
+    const { esc } = B();
+    const state = B().getState();
+    const prods = (state.products || []).filter(p => Array.isArray(p.variants) && p.variants.length > 0);
+    if (!prods.length) {
+      B().showToast('Chưa có sản phẩm nào có biến thể SKU để nhập kho.', 'danger');
+      return;
+    }
+
+    const REASONS = ['Nhập bổ sung hàng', 'Nhập lô sản xuất mới', 'Hoàn kho kiểm tra đạt', 'Điều chuyển kho', 'Khác'];
+    let mode = 'single';
+    let prodFilter = '';
+    let selectedProdId = prods.find(p => p.variants.some(v => v.sku === initialSku))?.id || prods[0].id;
+    const initVar = prods.find(p => p.id === selectedProdId)?.variants.find(v => v.sku === initialSku)
+      || prods.find(p => p.id === selectedProdId)?.variants[0];
+    let selectedColor = initVar?.color || '';
+    let selectedSize = initVar?.size || '';
+    let addQtyRaw = '10';
+    let reason = REASONS[0];
+    let note = '';
+    let batchReview = false;
+    let batchRows = [];
+    let isSubmitting = false;
+
+    const resetBatchRows = () => {
+      const p = prods.find(x => x.id === selectedProdId);
+      const stockMap = B().getState().stock || {};
+      batchRows = (p?.variants || []).map(v => ({
+        sku: v.sku,
+        color: v.color,
+        size: v.size,
+        current: stockMap[v.sku] ?? 0,
+        qty: '',
+      }));
+    };
+    resetBatchRows();
+
+    const parsePosInt = val => {
+      const s = String(val ?? '').trim();
+      if (!/^\d+$/.test(s)) return null;
+      const n = Number(s);
+      return Number.isSafeInteger(n) && n > 0 ? n : null;
+    };
+
+    const renderBody = (errMsg = '') => {
+      const stockMap = B().getState().stock || {};
+      const filteredProds = prods.filter(p => !prodFilter || p.name.toLowerCase().includes(prodFilter) || p.id.toLowerCase().includes(prodFilter));
+      if (filteredProds.length && !filteredProds.some(p => p.id === selectedProdId)) {
+        selectedProdId = filteredProds[0].id;
+      }
+      const p = prods.find(x => x.id === selectedProdId) || prods[0];
+      const colors = [...new Set((p.variants || []).map(v => v.color))];
+      if (!colors.includes(selectedColor)) selectedColor = colors[0] || '';
+      const sizes = (p.variants || []).filter(v => v.color === selectedColor).map(v => v.size);
+      if (!sizes.includes(selectedSize)) selectedSize = sizes[0] || '';
+      const variant = (p.variants || []).find(v => v.color === selectedColor && v.size === selectedSize) || null;
+      const sku = variant?.sku || '';
+      const curStock = sku ? (stockMap[sku] ?? 0) : 0;
+      const parsedQty = parsePosInt(addQtyRaw);
+      const afterStock = parsedQty !== null ? curStock + parsedQty : curStock;
+
+      const tabsHtml = `
+        <div class="restock-tabs" role="tablist">
+          <button type="button" class="restock-tab-btn ${mode === 'single' ? 'active' : ''}" data-rmode="single">Nhập đơn lẻ (1 SKU)</button>
+          <button type="button" class="restock-tab-btn ${mode === 'batch' ? 'active' : ''}" data-rmode="batch">Nhập hàng loạt (Nhiều SKU)</button>
+        </div>
+        ${errMsg ? `<div class="restock-alert" role="alert">${esc(errMsg)}</div>` : ''}`;
+
+      if (mode === 'single') {
+        openModal('Nhập thêm hàng tồn kho', `
+          ${tabsHtml}
+          <form id="restock-single-form">
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label>Tìm sản phẩm (tên hoặc mã)</label>
+                <input type="search" class="form-control" id="restock-prod-search" value="${esc(prodFilter)}" placeholder="Ví dụ: An Nhiên hoặc p1...">
+              </div>
+              <div class="form-group">
+                <label>Sản phẩm *</label>
+                <select class="form-control" id="restock-prod-select" ${!filteredProds.length ? 'disabled' : ''}>
+                  ${filteredProds.length ? filteredProds.map(x => `<option value="${esc(x.id)}" ${x.id === selectedProdId ? 'selected' : ''}>[${esc(x.id)}] ${esc(x.name)}</option>`).join('') : '<option value="">Không khớp sản phẩm</option>'}
+                </select>
+              </div>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label>Màu sắc *</label>
+                <select class="form-control" id="restock-color" ${!colors.length ? 'disabled' : ''}>
+                  ${colors.map(c => `<option value="${esc(c)}" ${c === selectedColor ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Kích thước *</label>
+                <select class="form-control" id="restock-size" ${!sizes.length ? 'disabled' : ''}>
+                  ${sizes.map(sz => `<option value="${esc(sz)}" ${sz === selectedSize ? 'selected' : ''}>${esc(sz)}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>SKU tương ứng</label>
+              <div><span class="restock-sku-pill" id="restock-sku-pill">${esc(sku || 'Chưa có SKU hợp lệ')}</span></div>
+            </div>
+            <div class="form-group">
+              <label>Số lượng muốn cộng thêm *</label>
+              <div class="restock-qty-wrap">
+                <input class="form-control restock-qty-input" id="restock-qty" type="number" min="1" step="1" value="${esc(addQtyRaw)}" placeholder="Nhập số > 0" required>
+                <div class="restock-chips">
+                  ${[5, 10, 20, 50].map(n => `<button type="button" class="restock-chip" data-rchip="${n}">+${n}</button>`).join('')}
+                </div>
+              </div>
+            </div>
+            <div class="restock-summary-grid">
+              <div class="restock-stat"><span>Tồn kho hiện tại</span><strong id="rs-cur">${curStock}</strong></div>
+              <div class="restock-stat is-add"><span>Số lượng nhập thêm</span><strong id="rs-add">+${parsedQty ?? 0}</strong></div>
+              <div class="restock-stat is-after"><span>Tồn dự kiến sau nhập</span><strong id="rs-after">${afterStock}</strong></div>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label>Lý do nhập kho *</label>
+                <select class="form-control" id="restock-reason">${REASONS.map(r => `<option value="${esc(r)}" ${r === reason ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>
+              </div>
+              <div class="form-group">
+                <label>Ghi chú (tùy chọn)</label>
+                <input class="form-control" id="restock-note" maxlength="80" value="${esc(note)}" placeholder="Mã lô, nhà cung cấp...">
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary" id="restock-submit-btn" ${!sku || isSubmitting ? 'disabled' : ''}>${isSubmitting ? 'Đang nhập kho...' : 'Xác nhận nhập kho'}</button>
+          </form>
+        `);
+      } else {
+        const validItems = batchRows.filter(r => parsePosInt(r.qty) !== null);
+        const totalAdd = validItems.reduce((s, r) => s + parsePosInt(r.qty), 0);
+        if (!batchReview) {
+          openModal('Nhập hàng loạt theo sản phẩm', `
+            ${tabsHtml}
+            <div class="form-group">
+              <label>Chọn sản phẩm</label>
+              <select class="form-control" id="batch-prod-select">
+                ${prods.map(x => `<option value="${esc(x.id)}" ${x.id === selectedProdId ? 'selected' : ''}>[${esc(x.id)}] ${esc(x.name)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="table-responsive">
+              <table class="admin-table restock-batch-table">
+                <thead><tr><th>Màu / Size</th><th>SKU</th><th>Tồn hiện tại</th><th>Số lượng cộng thêm</th><th class="text-right">Bỏ</th></tr></thead>
+                <tbody>
+                  ${batchRows.map((r, idx) => `
+                    <tr>
+                      <td><strong>${esc(r.color)}</strong> / ${esc(r.size)}</td>
+                      <td><span class="order-code">${esc(r.sku)}</span></td>
+                      <td>${r.current}</td>
+                      <td><input type="number" min="0" step="1" class="form-control batch-qty-inp" data-bidx="${idx}" value="${esc(r.qty)}" placeholder="0"></td>
+                      <td class="text-right"><button type="button" class="btn btn-outline btn-sm" data-bdel="${idx}">✕</button></td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+            <div class="restock-summary-grid">
+              <div class="restock-stat"><span>Biến thể sẽ nhập</span><strong id="bs-count">${validItems.length}</strong></div>
+              <div class="restock-stat is-add"><span>Tổng SL nhập thêm</span><strong id="bs-total">+${totalAdd}</strong></div>
+              <div class="restock-stat is-after"><span>Trạng thái</span><strong>${validItems.length ? 'Sẵn sàng xem lại' : 'Chưa nhập SL'}</strong></div>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label>Lý do nhập kho *</label>
+                <select class="form-control" id="batch-reason">${REASONS.map(r => `<option value="${esc(r)}" ${r === reason ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>
+              </div>
+              <div class="form-group">
+                <label>Ghi chú (tùy chọn)</label>
+                <input class="form-control" id="batch-note" maxlength="80" value="${esc(note)}" placeholder="Ghi chú đợt nhập...">
+              </div>
+            </div>
+            <button type="button" class="btn btn-primary" id="btn-batch-review" ${!validItems.length ? 'disabled' : ''}>Xem lại phiếu nhập (${validItems.length} SKU)</button>
+          `);
+        } else {
+          openModal('Xem lại phiếu nhập hàng loạt', `
+            ${tabsHtml}
+            <p><b>Sản phẩm:</b> ${esc(p.name)} · <b>Lý do:</b> ${esc(reason)}${note ? ` · <b>Ghi chú:</b> ${esc(note)}` : ''}</p>
+            <div class="table-responsive">
+              <table class="admin-table">
+                <thead><tr><th>SKU</th><th>Màu / Size</th><th>Trước</th><th>+ Nhập</th><th>Sau nhập</th></tr></thead>
+                <tbody>
+                  ${validItems.map(r => {
+                    const q = parsePosInt(r.qty);
+                    return `<tr><td><span class="order-code">${esc(r.sku)}</span></td><td>${esc(r.color)} / ${esc(r.size)}</td><td>${r.current}</td><td><strong style="color:var(--success)">+${q}</strong></td><td><strong>${r.current + q}</strong></td></tr>`;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+              <button type="button" class="btn btn-outline" id="btn-batch-back" ${isSubmitting ? 'disabled' : ''}>Quay lại chỉnh sửa</button>
+              <button type="button" class="btn btn-primary" id="btn-batch-confirm" ${isSubmitting ? 'disabled' : ''}>${isSubmitting ? 'Đang nhập kho...' : `Xác nhận nhập +${totalAdd} sản phẩm`}</button>
+            </div>
+          `);
+        }
+      }
+
+      document.querySelectorAll('[data-rmode]').forEach(btn => btn.addEventListener('click', () => {
+        mode = btn.dataset.rmode;
+        batchReview = false;
+        renderBody();
+      }));
+
+      if (mode === 'single') {
+        document.getElementById('restock-prod-search')?.addEventListener('input', e => {
+          prodFilter = e.target.value.trim().toLowerCase();
+          renderBody();
+          const inp = document.getElementById('restock-prod-search');
+          if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+        });
+        document.getElementById('restock-prod-select')?.addEventListener('change', e => { selectedProdId = e.target.value; renderBody(); });
+        document.getElementById('restock-color')?.addEventListener('change', e => { selectedColor = e.target.value; renderBody(); });
+        document.getElementById('restock-size')?.addEventListener('change', e => { selectedSize = e.target.value; renderBody(); });
+        document.getElementById('restock-reason')?.addEventListener('change', e => { reason = e.target.value; });
+        document.getElementById('restock-note')?.addEventListener('input', e => { note = e.target.value; });
+        const qtyEl = document.getElementById('restock-qty');
+        const syncPreview = () => {
+          addQtyRaw = qtyEl?.value ?? '';
+          const n = parsePosInt(addQtyRaw);
+          const addEl = document.getElementById('rs-add');
+          const afterEl = document.getElementById('rs-after');
+          if (addEl) addEl.textContent = `+${n ?? 0}`;
+          if (afterEl) afterEl.textContent = String(curStock + (n ?? 0));
+        };
+        qtyEl?.addEventListener('input', syncPreview);
+        document.querySelectorAll('[data-rchip]').forEach(btn => btn.addEventListener('click', () => {
+          if (qtyEl) { qtyEl.value = btn.dataset.rchip; syncPreview(); }
+        }));
+        document.getElementById('restock-single-form')?.addEventListener('submit', async e => {
+          e.preventDefault();
+          if (isSubmitting) return;
+          if (!sku) return renderBody('Vui lòng chọn biến thể SKU hợp lệ.');
+          const q = parsePosInt(qtyEl?.value);
+          if (q === null) return renderBody('Số lượng nhập thêm phải là số nguyên dương (> 0, không âm, không thập phân).');
+          isSubmitting = true;
+          renderBody();
+          try {
+            await B().adminActionRequest('POST', '/api/admin/stock/adjust', { sku, mode: 'in', qty: q, reason, note });
+            closeModal();
+            B().showToast(`Đã nhập thêm +${q} cho ${sku} (tồn mới: ${curStock + q})!`, 'success');
+          } catch (err) {
+            isSubmitting = false;
+            renderBody(err.message);
+          }
+        });
+      } else if (!batchReview) {
+        document.getElementById('batch-prod-select')?.addEventListener('change', e => {
+          selectedProdId = e.target.value;
+          resetBatchRows();
+          renderBody();
+        });
+        document.getElementById('batch-reason')?.addEventListener('change', e => { reason = e.target.value; });
+        document.getElementById('batch-note')?.addEventListener('input', e => { note = e.target.value; });
+        document.querySelectorAll('.batch-qty-inp').forEach(inp => inp.addEventListener('input', e => {
+          const idx = Number(e.target.dataset.bidx);
+          if (batchRows[idx]) batchRows[idx].qty = e.target.value;
+          const valid = batchRows.filter(r => parsePosInt(r.qty) !== null);
+          const tot = valid.reduce((s, r) => s + parsePosInt(r.qty), 0);
+          const cEl = document.getElementById('bs-count');
+          const tEl = document.getElementById('bs-total');
+          const revBtn = document.getElementById('btn-batch-review');
+          if (cEl) cEl.textContent = String(valid.length);
+          if (tEl) tEl.textContent = `+${tot}`;
+          if (revBtn) {
+            revBtn.disabled = !valid.length;
+            revBtn.textContent = `Xem lại phiếu nhập (${valid.length} SKU)`;
+          }
+        }));
+        document.querySelectorAll('[data-bdel]').forEach(btn => btn.addEventListener('click', () => {
+          const idx = Number(btn.dataset.bdel);
+          batchRows.splice(idx, 1);
+          renderBody();
+        }));
+        document.getElementById('btn-batch-review')?.addEventListener('click', () => {
+          const invalid = batchRows.find(r => String(r.qty).trim() !== '' && String(r.qty).trim() !== '0' && parsePosInt(r.qty) === null);
+          if (invalid) return renderBody(`Số lượng cho ${invalid.sku} phải là số nguyên dương.`);
+          batchReview = true;
+          renderBody();
+        });
+      } else {
+        document.getElementById('btn-batch-back')?.addEventListener('click', () => { batchReview = false; renderBody(); });
+        document.getElementById('btn-batch-confirm')?.addEventListener('click', async () => {
+          if (isSubmitting) return;
+          const items = batchRows.map(r => ({ sku: r.sku, qty: parsePosInt(r.qty) })).filter(x => x.qty !== null);
+          if (!items.length) return renderBody('Không có SKU hợp lệ để nhập kho.');
+          isSubmitting = true;
+          renderBody();
+          try {
+            const res = await B().adminActionRequest('POST', '/api/admin/stock/restock-batch', { items, reason, note });
+            closeModal();
+            B().showToast(`Đã nhập hàng loạt thành công ${res.updatedCount} SKU!`, 'success');
+          } catch (err) {
+            isSubmitting = false;
+            batchReview = false;
+            renderBody(err.message);
+          }
+        });
+      }
+    };
+
+    renderBody();
   }
 
   function openStockModal(sku, mode) {
@@ -1248,7 +1557,7 @@
   // 2.4.8 CHÍNH SÁCH & NỘI DUNG WEBSITE
   // =========================================================
   function renderPolicies() {
-    const { esc, formatDate } = B();
+    const { esc, formatDate, getStatusBadgeHtml } = B();
     const s = B().getState();
     const pol = s.policies || { version: 1, storeInfo: {}, banners: {}, visibility: {}, items: {} };
     const vis = pol.visibility || {};

@@ -44,7 +44,7 @@
   let dbReady=!serverMode, dbBusy=false, publicPolicies=null, publicPromotions=[], businessConfig={shipping:{standardFee:30000,remoteFee:45000},returnWindowDays:7,warrantyWindowDays:30,refundProcessingDays:5,complaintResponseDays:1};
   function mapPublicProduct(p, catMap){
     const activeVariants=Array.isArray(p.variants)?p.variants.filter(v=>v.active!==false):[];
-    const sizes=activeVariants.length?[...new Set(activeVariants.map(v=>v.size))]:(p.sizes||['S','M','L','XL']);
+    const sizes=serverMode?[...new Set(activeVariants.map(v=>v.size))]:(activeVariants.length?[...new Set(activeVariants.map(v=>v.size))]:(p.sizes||['S','M','L','XL']));
     const color=activeVariants[0]?.color||p.color||'';
     return {...p, category:catMap.get(p.categoryId)||p.category||'', color, sizes};
   }
@@ -59,14 +59,22 @@
     const hrsEl=document.getElementById('footer-store-hours');
     const fEmail=document.getElementById('footer-contact-email');
     const fPhone=document.getElementById('footer-contact-phone');
+    const fHours=document.getElementById('footer-contact-hours');
     if(regEl&&publicPolicies?.storeInfo?.region)regEl.textContent=publicPolicies.storeInfo.region;
     if(hrsEl&&publicPolicies?.storeInfo?.hours)hrsEl.textContent=publicPolicies.storeInfo.hours;
+    if(fHours&&publicPolicies?.storeInfo?.hours)fHours.textContent=publicPolicies.storeInfo.hours;
     if(fEmail&&publicPolicies?.storeInfo?.email)fEmail.textContent=publicPolicies.storeInfo.email;
     if(fPhone&&publicPolicies?.storeInfo?.hotline)fPhone.textContent=publicPolicies.storeInfo.hotline;
+    if(Array.isArray(data.categories)&&data.categories.length){
+      const catSel=document.getElementById('catalog-category');
+      if(catSel)catSel.innerHTML=['<option value="Tất cả">Tất cả</option>',...data.categories.map(c=>`<option value="${esc(c.name)}">${esc(c.name)}</option>`)].join('');
+    }
     if(Array.isArray(data.products)){
       const mapped=data.products.map(p=>mapPublicProduct(p,catMap));
       products.splice(0,products.length,...mapped);
     }
+    renderCategories();
+    renderShowcase();
   }
   function status(message,failed=false){
     let el=document.getElementById('database-status');
@@ -160,10 +168,10 @@
     if(!serverMode){const result=mutate();renderProducts();save();return result;}
     throw new Error('Thao tác này yêu cầu đăng nhập tài khoản khách hàng (triển khai ở GĐ2).');
   }
-  let category='Tất cả', search='', sort='featured', selectedSize='M', selectedColor='', selectedQty=1, selectedProduct=null, adminLogged=false, isSubmittingOrder=false, checkoutPromoCode='', checkoutQuote=null, checkoutIdemKey='';
-  let filters={sizes:[],colors:[],prices:[]};
+  let category='Tất cả', search='', sort='featured', showcaseTab='featured', selectedSize='M', selectedColor='', selectedQty=1, selectedProduct=null, adminLogged=false, isSubmittingOrder=false, checkoutPromoCode='', checkoutQuote=null, checkoutIdemKey='';
+  let filters={sizes:[],colors:[],prices:[],inStockOnly:false};
   const colorsFor=p=>{const vs=Array.isArray(p?.variants)?p.variants.filter(v=>v.active!==false):[];return vs.length?[...new Set(vs.map(v=>v.color))]:(p?.color?[p.color]:[]);};
-  const sizesFor=(p,color)=>{const vs=Array.isArray(p?.variants)?p.variants.filter(v=>v.active!==false&&(!color||v.color===color)):[];return vs.length?[...new Set(vs.map(v=>v.size))]:(p?.sizes || ['S','M','L','XL']);};
+  const sizesFor=(p,color)=>{if(Array.isArray(p?.variants)){const vs=p.variants.filter(v=>v.active!==false&&(!color||v.color===color));return [...new Set(vs.map(v=>v.size))];}return p?.sizes||['S','M','L','XL'];};
   const colors={'Đỏ':'#b91c1c','Đen':'#242424','Trắng':'#ffffff','Đỏ trầm':'#80252c','Trắng ngà':'#f3eee2','Nâu đất':'#805d48','Hồng sen':'#dd8a99','Hồng phấn':'#eac5c9','Xanh nhạt':'#a9c9cb','Xanh rêu':'#4b5d46'};
   const priceRanges=[['under500','Dưới 500.000đ',0,500000],['500to1m','500.000đ - 1.000.000đ',500000,1000000],['1to2m','1.000.000đ - 2.000.000đ',1000000,2000000],['2to3m','2.000.000đ - 3.000.000đ',2000000,3000000],['over3m','Từ 3.000.000đ',3000000,Infinity]];
   // Ngày thêm minh họa của dữ liệu sản phẩm trong bản trình diễn.
@@ -229,27 +237,81 @@
     document.querySelectorAll('#cart-count,[data-cart-count]').forEach(x=>x.textContent=cartCount());
     if(selectedProduct && productPage && !productPage.hidden && find(selectedProduct)) renderProductSummary();
   }
+  function productCardHtml(p,i=0){
+    const hasDisc=p.old&&p.old>p.price;
+    const discPct=hasDisc?Math.round((p.old-p.price)/p.old*100):0;
+    const badge=p.featured?'NỔI BẬT':(p.tag||'MỚI');
+    return `<article class="vp-product"><button class="vp-product-image" data-action="product" data-id="${p.id}" aria-label="Xem ${esc(p.name)}"><img src="${esc(p.img||'assets/ao-dai-do.png')}" alt="${esc(p.name)}" loading="${i<4?'eager':'lazy'}"><span class="vp-product-tag">${esc(badge)}</span><span class="vp-product-view">XEM CHI TIẾT</span></button><div class="vp-product-info"><div class="vp-product-category">${esc(p.category)}</div><button class="vp-product-name" data-action="product" data-id="${p.id}">${esc(p.name)}</button><div class="vp-product-price">${money(p.price)} ${hasDisc?`<del>${money(p.old)}</del> <small class="vp-disc-tag">-${discPct}%</small>`:''}</div>${p.color?`<div class="vp-swatches"><span style="background:${colors[p.color]||'#aaa'}"></span><small>${esc(p.color)}</small></div>`:''}${catalogStock(p)}</div></article>`;
+  }
+  function renderCategories(){
+    const listEl=document.getElementById('category-list');if(!listEl)return;
+    const sourceCats=(Array.isArray(state.categories)&&state.categories.length)
+      ? state.categories.filter(c=>c.active!==false)
+      : [...new Set(products.map(p=>p.category).filter(Boolean))].map((name,idx)=>({id:'cat'+idx,name,description:''}));
+    if(!sourceCats.length)return;
+    listEl.innerHTML=sourceCats.map((c,idx)=>{
+      const matching=products.filter(p=>p.active!==false&&p.category===c.name);
+      const repImg=c.img||matching.find(p=>p.img)?.img||'assets/ao-dai-do.png';
+      const num=String(idx+1).padStart(2,'0');
+      const desc=c.description||'Thiết kế truyền thống Việt Phục';
+      return `<a class="category-card" href="#san-pham" data-category="${esc(c.name)}"><div class="category-image"><img src="${esc(repImg)}" alt="${esc(c.name)}" loading="lazy"></div><div class="category-label"><span>${num} / BỘ SƯU TẬP</span><h3>${esc(c.name)}</h3><p>${esc(desc)}</p><small class="category-count">${matching.length} sản phẩm · Khám phá ↗</small></div></a>`;
+    }).join('');
+  }
+  function renderShowcase(){
+    const grid=document.getElementById('featured-grid');if(!grid)return;
+    const active=products.filter(p=>p.active!==false);
+    let list=[];
+    if(showcaseTab==='featured'){
+      list=active.filter(p=>p.featured).slice(0,4);
+      if(!list.length)list=active.slice(0,4);
+    }else{
+      list=active.slice().sort((a,b)=>String(b.addedAt||'').localeCompare(String(a.addedAt||''))).slice(0,4);
+    }
+    grid.innerHTML=list.length?list.map((p,i)=>productCardHtml(p,i)).join(''):'<p class="vp-empty">Chưa có sản phẩm nào.</p>';
+    document.querySelectorAll('[data-action="showcase-tab"]').forEach(btn=>{
+      const on=btn.dataset.showcase===showcaseTab;
+      btn.classList.toggle('active',on);
+      btn.setAttribute('aria-selected',String(on));
+    });
+  }
   function renderProducts(){
     const grid=document.getElementById('product-grid'); if(!grid) return;
     const query=normalizeSearch(search);
     let list=products.filter(p=>{
       const pColors=colorsFor(p);
       const matchedColors=filters.colors.length?pColors.filter(c=>filters.colors.includes(c)):pColors;
+      const hasStock=sizesFor(p).some(s=>pColors.some(c=>sizesFor(p,c).includes(s)&&available(p.id,s,c)>0));
       return (category==='Tất cả'||p.category===category)
         && matchesSearch(p,query)
-        && matchedColors.length>0
+        && (!filters.colors.length || matchedColors.length>0)
         && (!filters.sizes.length || filters.sizes.some(s=>matchedColors.some(c=>sizesFor(p,c).includes(s)&&available(p.id,s,c)>0)))
-        && (!filters.prices.length || priceRanges.some(([id,,min,max])=>filters.prices.includes(id)&&p.price>=min&&p.price<max));
+        && (!filters.prices.length || priceRanges.some(([id,,min,max])=>filters.prices.includes(id)&&p.price>=min&&p.price<max))
+        && (!filters.inStockOnly || hasStock);
     });
     if(sort==='price-asc') list.sort((a,b)=>a.price-b.price);
     if(sort==='price-desc') list.sort((a,b)=>b.price-a.price);
     if(sort==='newest') list.sort((a,b)=>String(b.addedAt||'').localeCompare(String(a.addedAt||'')));
+    if(sort==='name-asc') list.sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'vi'));
     const count=document.querySelector('[data-product-count]');if(count) count.textContent=list.length+' sản phẩm';
-    const summary=document.getElementById('filter-summary');if(summary) summary.textContent=list.length+' sản phẩm'+(filters.sizes.length+filters.colors.length+filters.prices.length?' · '+(filters.sizes.length+filters.colors.length+filters.prices.length)+' lựa chọn lọc':'');
+    const activeFilterCount=filters.sizes.length+filters.colors.length+filters.prices.length+(filters.inStockOnly?1:0);
+    const summary=document.getElementById('filter-summary');if(summary) summary.textContent=list.length+' sản phẩm'+(activeFilterCount?' · '+activeFilterCount+' lựa chọn lọc':'');
+    const clearBtn=document.getElementById('clear-all-filters');
+    if(clearBtn)clearBtn.hidden=!(category!=='Tất cả'||search||activeFilterCount>0);
+    const bannerEl=document.getElementById('catalog-banner');
+    if(bannerEl){
+      if(category!=='Tất cả'){
+        const catObj=Array.isArray(state.categories)?state.categories.find(c=>c.name===category):null;
+        bannerEl.hidden=false;
+        bannerEl.innerHTML=`<div><h3>${esc(category)}</h3><p>${esc(catObj?.description||'Tuyển chọn thiết kế thuộc dòng trang phục '+category+' của Việt Phục.')} · <b>${list.length} sản phẩm</b></p></div><button type="button" class="vp-btn secondary" data-action="clear-all-filters">XEM TẤT CẢ DANH MỤC</button>`;
+      }else{
+        bannerEl.hidden=true;
+        bannerEl.innerHTML='';
+      }
+    }
     const searchInput=document.getElementById('catalog-search');if(searchInput && searchInput.value!==search)searchInput.value=search;
     const categoryInput=document.getElementById('catalog-category');if(categoryInput)categoryInput.value=category;
     const sortInput=document.getElementById('catalog-sort');if(sortInput)sortInput.value=sort;
-    grid.innerHTML=list.length?list.map((p,i)=>{const hasDisc=p.old&&p.old>p.price;const discPct=hasDisc?Math.round((p.old-p.price)/p.old*100):0;return `<article class="vp-product"><button class="vp-product-image" data-action="product" data-id="${p.id}" aria-label="Xem ${esc(p.name)}"><img src="${p.img}" alt="${esc(p.name)}" loading="${i<4?'eager':'lazy'}"><span class="vp-product-tag">${p.tag}</span><span class="vp-product-view">KHÁM PHÁ SẢN PHẨM</span></button><div class="vp-product-info"><div class="vp-product-category">${esc(p.category)}</div><button class="vp-product-name" data-action="product" data-id="${p.id}">${esc(p.name)}</button><div class="vp-product-price">${money(p.price)} ${hasDisc?`<del>${money(p.old)}</del> <small class="vp-disc-tag">-${discPct}%</small>`:''}</div><div class="vp-swatches"><span style="background:${colors[p.color]||'#aaa'}"></span><small>${esc(p.color)}</small></div>${catalogStock(p)}</div></article>`;}).join(''):'<p class="vp-empty">Không tìm thấy sản phẩm phù hợp. Hãy thử thay đổi từ khóa hoặc bộ lọc.</p>';
+    grid.innerHTML=list.length?list.map((p,i)=>productCardHtml(p,i)).join(''):'<p class="vp-empty">Không tìm thấy sản phẩm phù hợp. Hãy thử thay đổi từ khóa hoặc bộ lọc.</p>';
     document.querySelectorAll('[data-category]').forEach(el=>el.classList.toggle('active',el.dataset.category===category));
   }
   const css=`
@@ -298,7 +360,8 @@
     const sizeRows=allSizes.map(s=>{const offered=products.some(p=>sizesFor(p).includes(s)&&available(p.id,s)>0);return `<label class="vp-filter-check"><span>${esc(s)}</span><input type="checkbox" name="sizes" value="${esc(s)}" ${filters.sizes.includes(s)?'checked':''} ${!offered&&!filters.sizes.includes(s)?'disabled':''}></label>`;}).join('');
     const colorRows=Object.entries(colors).map(([name,color])=>`<label class="vp-color-choice" title="${esc(name)}"><input type="checkbox" name="colors" value="${esc(name)}" aria-label="${esc(name)}" ${filters.colors.includes(name)?'checked':''}><span style="--swatch:${color}"></span></label>`).join('');
     const priceRows=priceRanges.map(([id,label])=>`<label class="vp-filter-check"><span>${label}</span><input type="checkbox" name="prices" value="${id}" ${filters.prices.includes(id)?'checked':''}></label>`).join('');
-    modal('Bộ lọc sản phẩm',`<form class="vp-filter-form" data-form="filters"><div class="vp-filter-content"><p class="vp-filter-hint">Chọn một hoặc nhiều giá trị trong mỗi nhóm.</p><details class="vp-filter-group" open><summary>KÍCH THƯỚC</summary>${sizeRows}</details><details class="vp-filter-group" open><summary>MÀU SẮC</summary><div class="vp-color-grid">${colorRows}</div></details><details class="vp-filter-group" open><summary>KHOẢNG GIÁ</summary>${priceRows}</details></div><div class="vp-filter-actions"><button type="button" class="vp-btn secondary" data-action="filter-reset">XÓA BỘ LỌC</button><button type="submit" class="vp-btn">XEM KẾT QUẢ</button></div></form>`);
+    const stockRow=`<label class="vp-filter-check"><span>Chỉ hiển thị sản phẩm còn hàng</span><input type="checkbox" name="inStockOnly" value="1" ${filters.inStockOnly?'checked':''}></label>`;
+    modal('Bộ lọc sản phẩm',`<form class="vp-filter-form" data-form="filters"><div class="vp-filter-content"><p class="vp-filter-hint">Chọn một hoặc nhiều giá trị trong mỗi nhóm.</p><details class="vp-filter-group" open><summary>TÌNH TRẠNG KHO</summary>${stockRow}</details><details class="vp-filter-group" open><summary>KÍCH THƯỚC</summary>${sizeRows}</details><details class="vp-filter-group" open><summary>MÀU SẮC</summary><div class="vp-color-grid">${colorRows}</div></details><details class="vp-filter-group" open><summary>KHOẢNG GIÁ</summary>${priceRows}</details></div><div class="vp-filter-actions"><button type="button" class="vp-btn secondary" data-action="filter-reset">XÓA BỘ LỌC</button><button type="submit" class="vp-btn">XEM KẾT QUẢ</button></div></form>`);
     document.querySelector('.vp-overlay .vp-close')?.focus();
   }
   function detail(id){let p=find(id);if(!p)return;selectedProduct=id;const cols=colorsFor(p);selectedColor=cols[0]||p.color||'';const szs=sizesFor(p,selectedColor);selectedSize=szs.includes('M')?'M':szs[0];selectedQty=1;renderDetail();}
@@ -354,6 +417,8 @@
 
   function renderProductSummary() {
     const p = find(selectedProduct);
+    const cols = colorsFor(p);
+    if (!cols.includes(selectedColor)) selectedColor = cols[0] || '';
     const sizes = sizesFor(p, selectedColor);
     if (!sizes.includes(selectedSize)) selectedSize = sizes[0];
     const variant = variantFor(p.id, selectedSize, selectedColor);
@@ -361,27 +426,37 @@
     const inCart = quantityInCart(p.id, selectedSize, selectedColor);
     const remaining = Math.max(0, stock - inCart);
     const price = unitPriceFor(p, variant);
+    const canBuy = Boolean(variant && remaining > 0);
     selectedQty = Math.min(selectedQty, Math.max(1, remaining));
     const summary = productPage.querySelector('.product-summary');
     const focused = summary.contains(document.activeElement) ? document.activeElement : null;
-    function choices(values, field, active, action) {
-      return values.map(value => `<button type="button" data-action="${action}" data-${field}="${esc(value)}"
+    function colorChoices(values, active) {
+      return values.map(value => `<button type="button" data-action="detail-color" data-color="${esc(value)}"
+        aria-pressed="${value === active}"><span class="product-swatch-dot" style="background:${colors[value] || '#aaa'}"></span>${esc(value)}</button>`).join('');
+    }
+    function sizeChoices(values, active) {
+      return values.map(value => `<button type="button" data-action="size" data-size="${esc(value)}"
         aria-pressed="${value === active}">${esc(value)}</button>`).join('');
     }
+    const stockText = !cols.length || !sizes.length
+      ? 'Sản phẩm hiện chưa có phân loại mở bán (Hết hàng).'
+      : stock < 1
+        ? `Hết hàng ở phân loại này${variant?.sku ? ' · SKU ' + esc(variant.sku) : ''}`
+        : `Còn ${stock} sản phẩm${inCart ? ` (trong giỏ: ${inCart} · có thể thêm: ${remaining})` : ''}${variant?.sku ? ' · SKU ' + esc(variant.sku) : ''}`;
     summary.innerHTML = `<p class="product-category">${esc(p.category)}</p>
       <h1>${esc(p.name)}</h1>
       <p class="product-price">${money(price)} ${p.old > price ? `<del>${money(p.old)}</del>` : ''}</p>
-      <fieldset><legend>Màu sắc</legend>${choices(colorsFor(p), 'color', selectedColor, 'detail-color')}</fieldset>
-      <fieldset><legend>Kích thước</legend>${choices(sizes, 'size', selectedSize, 'size')}</fieldset>
-      <p class="product-stock">Còn ${stock} sản phẩm${inCart ? ` (trong giỏ: ${inCart} · có thể thêm: ${remaining})` : ''}${variant?.sku ? ' · SKU ' + esc(variant.sku) : ''}</p>
+      ${cols.length ? `<fieldset><legend>Màu sắc: ${esc(selectedColor)}</legend>${colorChoices(cols, selectedColor)}</fieldset>` : ''}
+      ${sizes.length ? `<fieldset><legend>Kích thước: ${esc(selectedSize)}</legend>${sizeChoices(sizes, selectedSize)}</fieldset>` : ''}
+      <p class="product-stock${!canBuy ? ' is-out' : ''}">${stockText}</p>
       <div class="product-quantity"><strong>Số lượng</strong>
-        <button data-action="detail-qty" data-delta="-1" aria-label="Giảm số lượng" ${selectedQty <= 1 ? 'disabled' : ''}>−</button>
+        <button data-action="detail-qty" data-delta="-1" aria-label="Giảm số lượng" ${!canBuy || selectedQty <= 1 ? 'disabled' : ''}>−</button>
         <output>${selectedQty}</output>
-        <button data-action="detail-qty" data-delta="1" aria-label="Tăng số lượng" ${selectedQty >= remaining ? 'disabled' : ''}>+</button>
+        <button data-action="detail-qty" data-delta="1" aria-label="Tăng số lượng" ${!canBuy || selectedQty >= remaining ? 'disabled' : ''}>+</button>
       </div>
       <div class="product-actions mobile-action-bar">
-        <button class="vp-btn secondary" data-action="add" ${remaining < 1 ? 'disabled' : ''}>THÊM VÀO GIỎ</button>
-        <button class="vp-btn" data-action="buy" ${remaining < 1 ? 'disabled' : ''}>MUA NGAY</button>
+        <button class="vp-btn secondary" data-action="add" ${!canBuy ? 'disabled' : ''}>THÊM VÀO GIỎ</button>
+        <button class="vp-btn" data-action="buy" ${!canBuy ? 'disabled' : ''}>MUA NGAY</button>
       </div>`;
     if (focused) Array.from(summary.querySelectorAll('button')).find(button =>
       button.dataset.action === focused.dataset.action && button.textContent === focused.textContent
@@ -619,40 +694,116 @@
     }
   }
   function demoQr(order) {
-    return `<section class="demo-qr" aria-label="Đối chiếu thanh toán QR">
-      <img src="assets/demo-payment.svg" width="154" height="154" alt="QR chứa thông tin tài khoản thử nghiệm Việt Phục">
-      <div><h3>Đối chiếu thanh toán QR</h3>
-        <p>Ngân hàng: VIET PHUC DEMO<br>Chủ tài khoản: VIET PHUC DEMO<br>Số tài khoản: <b>VP-DEMO-0001</b></p>
-        <p>Số tiền: <b>${money(order.total)}</b><br>Nội dung chuyển khoản: <b>${esc(order.id)}</b></p>
-        <small>QR chỉ chứa thông tin mẫu. Vui lòng không chuyển tiền thật.</small>
-      </div></section>`;
+    const payStatusLabel = order.paymentStatus === 'failed'
+      ? 'Thanh toán mô phỏng thất bại (có thể thử lại)'
+      : 'Chờ thanh toán mô phỏng';
+    return `<section class="demo-qr" aria-label="Thanh toán QR Demo">
+      <div class="vp-qr-banner">ĐÂY LÀ THANH TOÁN MÔ PHỎNG – KHÔNG CHUYỂN TIỀN THẬT</div>
+      <div class="vp-qr-grid">
+        <img src="assets/demo-payment.svg" width="160" height="160" alt="QR chứa thông tin tài khoản thử nghiệm Việt Phục">
+        <div>
+          <div class="vp-row"><h3>Thanh toán QR (Demo)</h3><span class="vp-status">${esc(payStatusLabel)}</span></div>
+          <p>Mã đơn hàng: <b>${esc(order.id)}</b></p>
+          <p>Ngân hàng: <b>VIET PHUC DEMO</b><br>Chủ tài khoản: <b>VIET PHUC DEMO</b><br>Số tài khoản: <b>VP-DEMO-0001</b> <button type="button" class="vp-copy-btn" data-action="copy-text" data-copy="VP-DEMO-0001">Sao chép STK</button></p>
+          <p>Số tiền: <b style="color:var(--brand-burgundy,#8c2f39)">${money(order.total)}</b><br>Nội dung chuyển khoản: <b>${esc(order.id)}</b> <button type="button" class="vp-copy-btn" data-action="copy-text" data-copy="${esc(order.id)}">Sao chép nội dung</button></p>
+          <small>QR chỉ phục vụ mô phỏng kiểm thử. Không chuyển tiền thật qua ứng dụng ngân hàng.</small>
+        </div>
+      </div>
+    </section>`;
   }
 
-  function cancellationForm(id) {
-    return `<details class="order-change"><summary>Hủy đơn hàng</summary>
-      <form class="vp-form" data-form="cancel-order" data-id="${esc(id)}">
-        <label>Lý do hủy đơn<textarea name="reason" rows="3" maxlength="300" required></textarea></label>
-        <button class="vp-btn" type="submit">Xác nhận hủy đơn</button>
+  function cancelRequestStatusLabel(status) {
+    if (status === 'pending') return 'Chờ Admin xử lý';
+    if (status === 'approved') return 'Đã chấp nhận hủy';
+    if (status === 'rejected') return 'Admin đã từ chối';
+    return status || '';
+  }
+
+  function cancelRequestSection(order) {
+    const cr = order.cancelRequest;
+    const statusBox = cr ? `<div class="vp-req-card ${cr.status === 'pending' ? 'is-pending' : cr.status === 'rejected' ? 'is-rejected' : 'is-approved'}">
+      <div class="vp-row"><strong>Yêu cầu hủy đơn hàng</strong><span class="vp-status">${esc(cancelRequestStatusLabel(cr.status))}</span></div>
+      <p><b>Lý do của bạn:</b> ${esc(cr.reason)}</p>
+      <p class="vp-muted">Gửi lúc: ${esc(fmtDateVi(cr.createdAt))}</p>
+      ${cr.resolvedAt ? `<p><b>Phản hồi từ Admin (${esc(fmtDateVi(cr.resolvedAt))}):</b> ${esc(cr.adminReason || '—')}</p>` : ''}
+    </div>` : '';
+
+    if (order.orderStatus === 'shipping') {
+      return `${statusBox}<div class="vp-note">Đơn hàng đang được vận chuyển nên không thể hủy trực tiếp. Nếu cần hỗ trợ gấp hoặc từ chối nhận hàng khi giao, vui lòng liên hệ CSKH.</div>`;
+    }
+    if (!['pending', 'confirmed', 'packing'].includes(order.orderStatus) || cr?.status === 'pending') {
+      return statusBox;
+    }
+
+    return `${statusBox}<details class="order-change"><summary>Yêu cầu hủy đơn hàng</summary>
+      <form class="vp-form" data-form="customer-cancel-request" data-id="${esc(order.id)}">
+        <div class="vp-warning-box">Lưu ý: Yêu cầu hủy sẽ được gửi tới Admin xét duyệt. Đơn hàng chỉ hủy sau khi Admin xác nhận chấp thuận.</div>
+        <label>Chọn lý do hủy đơn *
+          <select name="reasonCode" data-cancel-reason-select>
+            <option value="wrong_product">Đặt nhầm sản phẩm</option>
+            <option value="change_product">Muốn thay đổi sản phẩm</option>
+            <option value="change_plan">Thay đổi kế hoạch mua hàng</option>
+            <option value="delivery_time">Thời gian giao hàng không phù hợp</option>
+            <option value="other">Lý do khác (nhập chi tiết bên dưới)</option>
+          </select>
+        </label>
+        <label>Chi tiết lý do hủy *<textarea name="reason" rows="2" maxlength="500" placeholder="Nhập lý do cụ thể nếu chọn Lý do khác hoặc bổ sung ghi chú..." required>Đặt nhầm sản phẩm</textarea></label>
+        <label style="display:flex;gap:8px;align-items:flex-start;font-weight:400"><input type="checkbox" name="confirmCancel" required style="width:auto;margin-top:3px"><span>Tôi xác nhận muốn gửi yêu cầu hủy đơn hàng <b>${esc(order.id)}</b>.</span></label>
+        <button class="vp-btn" type="submit">Gửi yêu cầu hủy đơn</button>
       </form></details>`;
   }
 
-  function editableOrderDetails(order) {
-    if (order.orderStatus !== 'confirmed' || order.inventoryStatus !== 'reserved' || order.shipment?.shipStatus !== 'pending') return '';
-    const fields = order.items.map(item => {
-      const product = find(item.productId);
-      const variants = (product?.variants || []).filter(v => product.active && v.active && v.sku !== item.sku);
-      return `<label>${esc(item.name)} × ${item.qty}
-        <select name="sku"><option value="${esc(item.sku)}">${esc(item.color)} / ${esc(item.size)} (đã chọn)</option>
-          ${variants.map(v => {
-            const samePrice = (v.priceOverride ?? product.price) === item.unitPrice;
-            return `<option value="${esc(v.sku)}" ${samePrice ? '' : 'disabled'}>${esc(v.color)} / ${esc(v.size)}${samePrice ? '' : ' (khác giá)'}</option>`;
-          }).join('')}</select></label>`;
+  function changeRequestSection(order) {
+    const reqs = Array.isArray(order.changeRequests) ? order.changeRequests : [];
+    const listHtml = reqs.map(ch => {
+      const itemDiffs = (ch.newData?.items || []).map(it =>
+        `<li>${esc(it.productName)} × ${it.qty}: <span>${esc(it.oldColor)}/${esc(it.oldSize)} (${esc(it.oldSku)})</span> → <b>${esc(it.newColor)}/${esc(it.newSize)} (${esc(it.newSku)})</b></li>`
+      ).join('');
+      const addrCh = ch.newData?.addressChange;
+      return `<div class="vp-req-card ${ch.status === 'pending' ? 'is-pending' : ch.status === 'rejected' ? 'is-rejected' : 'is-approved'}">
+        <div class="vp-row"><strong>Yêu cầu thay đổi đơn (${esc(ch.id)})</strong><span class="vp-status">${esc(cancelRequestStatusLabel(ch.status))}</span></div>
+        ${addrCh ? `<p><b>Đổi giao nhận:</b> ${esc(ch.oldData?.receiver)} · ${esc(ch.oldData?.phone)} · ${esc(ch.oldData?.address)} → <b>${esc(addrCh.receiver)} · ${esc(addrCh.phone)} · ${esc(addrCh.address)}</b></p>` : ''}
+        ${itemDiffs ? `<ul style="margin:4px 0 4px 18px;padding:0;font-size:13px">${itemDiffs}</ul>` : ''}
+        ${ch.newData?.priceDelta ? `<p><b>Chênh lệch tạm tính (mô phỏng):</b> ${ch.newData.priceDelta > 0 ? '+' : ''}${money(ch.newData.priceDelta)}</p>` : ''}
+        <p><b>Lý do:</b> ${esc(ch.reason)} <small class="vp-muted">(${esc(fmtDateVi(ch.createdAt))})</small></p>
+        ${ch.resolvedAt ? `<p><b>Phản hồi từ Admin (${esc(fmtDateVi(ch.resolvedAt))}):</b> ${esc(ch.adminReason || '—')}</p>` : ''}
+      </div>`;
     }).join('');
-    return `<details class="order-change"><summary>Thay đổi địa chỉ, màu sắc hoặc kích thước</summary>
-      <form class="vp-form" data-form="edit-order-details" data-id="${esc(order.id)}" data-version="${order.history.length}">
-        <label>Địa chỉ nhận hàng đầy đủ<textarea name="address" rows="2" minlength="5" maxlength="600" required>${esc(order.address)}</textarea></label>
-        ${fields}<p class="vp-muted">Chọn phân loại cùng giá. Cửa hàng kiểm tra tồn kho khi lưu.</p>
-        <button class="vp-btn" type="submit">Lưu thay đổi</button>
+
+    const hasPending = reqs.some(r => r.status === 'pending');
+    if (order.orderStatus === 'packing' || order.orderStatus === 'shipping' || order.orderStatus === 'delivered') {
+      return `${listHtml}<p class="vp-muted" style="margin-top:8px">Đơn hàng đã chuyển sang giai đoạn đóng gói/vận chuyển nên chức năng yêu cầu thay đổi đã được khóa.</p>`;
+    }
+    if (order.orderStatus !== 'confirmed' || order.inventoryStatus !== 'reserved' || order.shipment?.shipStatus !== 'pending' || hasPending) {
+      return listHtml;
+    }
+
+    const fields = (order.items || []).map((item, idx) => {
+      const product = find(item.productId);
+      const variants = (product?.variants || []).filter(v => product.active && v.active);
+      return `<label>${esc(item.name)} × ${item.qty} <small class="vp-muted">(Hiện tại: ${esc(item.color)} / ${esc(item.size)} · ${money(item.unitPrice)})</small>
+        <select name="item_sku_${idx}" data-item-index="${idx}" data-old-sku="${esc(item.sku)}" data-qty="${item.qty}" data-old-price="${item.unitPrice}">
+          <option value="${esc(item.sku)}">Giữ nguyên: ${esc(item.color)} / ${esc(item.size)} (${money(item.unitPrice)})</option>
+          ${variants.filter(v => v.sku !== item.sku).map(v => {
+            const avail = Number(state.stock?.[v.sku] ?? 0);
+            const unitP = v.priceOverride ?? product.price;
+            const diff = (unitP - item.unitPrice) * item.qty;
+            const oos = avail < item.qty;
+            return `<option value="${esc(v.sku)}" ${oos ? 'disabled' : ''}>${esc(v.color)} / ${esc(v.size)} [${esc(v.sku)}] · ${oos ? `Hết hàng (còn ${avail})` : `Còn ${avail} · ${money(unitP)}${diff ? ` (${diff > 0 ? '+' : ''}${money(diff)})` : ''}`}</option>`;
+          }).join('')}
+        </select></label>`;
+    }).join('');
+
+    return `${listHtml}<details class="order-change"><summary>Yêu cầu thay đổi đơn hàng</summary>
+      <form class="vp-form" data-form="customer-change-request" data-id="${esc(order.id)}">
+        <div class="vp-note">Yêu cầu thay đổi sẽ được gửi để Admin kiểm tra tồn kho và xét duyệt trước khi áp dụng vào đơn hàng.</div>
+        <label>Tên người nhận<input name="receiver" required minlength="2" maxlength="120" value="${esc(order.receiver || '')}"></label>
+        <label>Số điện thoại nhận hàng<input name="phone" required value="${esc(order.phone || '')}"></label>
+        <label>Địa chỉ nhận hàng đầy đủ<textarea name="address" rows="2" minlength="5" maxlength="500" required>${esc(order.address || '')}</textarea></label>
+        ${fields}
+        <label>Lý do / Ghi chú yêu cầu thay đổi *<textarea name="reason" rows="2" maxlength="500" required placeholder="Ví dụ: Đổi sang size L cho vừa hơn hoặc đổi địa chỉ nhận hàng"></textarea></label>
+        <div class="vp-note" id="vp-change-summary-${esc(order.id)}">Chọn thông tin muốn thay đổi rồi nhấn gửi yêu cầu.</div>
+        <button class="vp-btn" type="submit">Gửi yêu cầu thay đổi đơn</button>
       </form></details>`;
   }
 
@@ -669,10 +820,10 @@
       const orderReturns=(retRes.returns||[]).filter(r=>r.orderId===o.id);
       const addr=o.receiver?`${o.receiver}${o.phone?` · ${o.phone}`:''}${o.address?` · ${o.address}`:''}`:(o.shippingAddress&&typeof o.shippingAddress==='object'?`${o.shippingAddress.receiver||''} · ${o.shippingAddress.phone||''} · ${o.shippingAddress.address||''}`:(o.shippingAddress||'—'));
       const items=(o.items||[]).map(i=>`<div class="vp-row"><span>${esc(i.name||i.productName||'Sản phẩm')} (${esc(i.color||'')}${i.size?` / ${esc(i.size)}`:''})${i.sku?` <small class="vp-muted">[${esc(i.sku)}]</small>`:''} × ${i.qty||1}</span><b>${money((i.unitPrice??i.price??0)*(i.qty||1))}</b></div>`).join('');
-      const payMethodLabel=o.paymentMethod==='online'?'Thanh toán trực tuyến':'Thanh toán khi nhận hàng';
+      const payMethodLabel=o.paymentMethod==='online'?'Thanh toán bằng QR (Mô phỏng)':'Thanh toán khi nhận hàng (COD)';
       const canPaySim=o.paymentMethod==='online'&&o.orderStatus!=='cancelled'&&(o.paymentStatus==='pending'||o.paymentStatus==='failed');
-      const canCancel=['pending','confirmed'].includes(o.orderStatus);
       const canReturn=o.orderStatus==='delivered';
+      const refundHtml=(o.refunds||[]).length?`<div class="vp-note"><b>Trạng thái hoàn tiền (Mô phỏng):</b> ${(o.refunds||[]).map(rf=>`${rf.status==='success'?'Đã hoàn tiền mô phỏng':rf.status==='pending'?'Chờ hoàn tiền mô phỏng':'Hoàn tiền thất bại'} (${money(rf.amount)})`).join(' · ')}</div>`:'';
       const deliveredAt=o.shipment?.deliveredAt||null;
       const retDays=o.policySnapshot?.returnWindowDays||businessConfig?.returnWindowDays||7;
       const warDays=o.policySnapshot?.warrantyWindowDays||businessConfig?.warrantyWindowDays||30;
@@ -689,7 +840,7 @@
       const returnsHtml=orderReturns.length
         ? `<div class="vp-line"></div><p><b>Yêu cầu đổi trả / hỗ trợ chất lượng (${orderReturns.length}):</b></p>${orderReturns.map(r=>`<div class="vp-promo-box"><b>${esc(r.id)}</b> · ${esc(r.type)} · <span class="vp-status">${esc(r.status)}</span><br>Lý do: ${esc(r.reason)}${r.shippingFeeBearer?`<br>Phí VC đổi trả: ${r.shippingFeeBearer==='store'?'Cửa hàng chịu (lỗi SP/giao sai)':'Khách hàng chịu (đổi theo nhu cầu)'}`:''}${r.adminNote?`<br>Phản hồi: ${esc(r.adminNote)}`:''}</div>`).join('')}`
         : '';
-      box.innerHTML=`<button type="button" class="vp-link" data-action="customer-tab" data-tab="orders">← Quay lại danh sách đơn hàng</button><div class="vp-order-detail"><div class="vp-row"><h3>Đơn ${esc(o.id)}</h3><span class="vp-status">${esc(fmtOrderStatus(o.orderStatus||o.status))}</span></div><p><b>Ngày đặt:</b> ${esc(fmtDateVi(o.createdAt||o.date))}</p><p><b>Trạng thái đơn hàng:</b> ${esc(fmtOrderStatus(o.orderStatus))} · <b>Thanh toán:</b> ${esc(fmtPaymentStatus(o.paymentStatus))} · <b>Vận chuyển:</b> ${esc(fmtShipStatus(o.shipment?.shipStatus||'pending'))}</p><p><b>Phương thức:</b> ${esc(payMethodLabel)}</p><p><b>Giao nhận:</b> ${esc(addr)}</p>${o.note?`<p><b>Ghi chú:</b> ${esc(o.note)}</p>`:''}${o.orderStatus==='cancelled' && o.history?.length ? `<p><b>Lý do hủy:</b> ${esc(o.history.filter(h=>h.status==='cancelled').at(-1)?.note || '—')}</p>` : ''}${snapHtml}<div class="vp-line"></div>${items}<div class="vp-line"></div>${o.subtotal!==undefined?`<div class="vp-row"><span>Tiền hàng</span><span>${money(o.subtotal)}</span></div>`:''}${o.discountAmount?`<div class="vp-row"><span>Giảm giá${o.discountCode?` (${esc(o.discountCode)})`:''}</span><span>−${money(o.discountAmount)}</span></div>`:''}${o.shippingFee!==undefined?`<div class="vp-row"><span>Phí vận chuyển</span><span>${money(o.shippingFee)}</span></div>`:''}<div class="vp-row"><strong>Tổng thanh toán</strong><strong>${money(o.total||0)}</strong></div>${windowHint?`<p class="vp-muted" style="margin-top:8px">${esc(windowHint)}</p>`:''}${canPaySim ? demoQr(o) : ''}${editableOrderDetails(o)}${canCancel ? cancellationForm(o.id) : ''}<div class="vp-inline-actions">${canPaySim?`<button type="button" class="vp-btn" data-action="customer-pay-sim" data-id="${esc(o.id)}" data-sim="success">MÔ PHỎNG THANH TOÁN THÀNH CÔNG</button><button type="button" class="vp-btn secondary" data-action="customer-pay-sim" data-id="${esc(o.id)}" data-sim="fail">MÔ PHỎNG THẤT BẠI</button>`:''}${canReturn?`<button type="button" class="vp-btn secondary" data-action="open-return-form" data-id="${esc(o.id)}">YÊU CẦU ĐỔI TRẢ / HỖ TRỢ CHẤT LƯỢNG</button>`:''}</div>${returnsHtml}<div id="vp-return-form-wrap"></div></div>`;
+      box.innerHTML=`<button type="button" class="vp-link" data-action="customer-tab" data-tab="orders">← Quay lại danh sách đơn hàng</button><div class="vp-order-detail"><div class="vp-row"><h3>Đơn ${esc(o.id)}</h3><span class="vp-status">${esc(fmtOrderStatus(o.orderStatus||o.status))}</span></div><p><b>Ngày đặt:</b> ${esc(fmtDateVi(o.createdAt||o.date))}</p><p><b>Trạng thái đơn hàng:</b> ${esc(fmtOrderStatus(o.orderStatus))} · <b>Thanh toán:</b> ${esc(fmtPaymentStatus(o.paymentStatus))} · <b>Vận chuyển:</b> ${esc(fmtShipStatus(o.shipment?.shipStatus||'pending'))}</p><p><b>Phương thức:</b> ${esc(payMethodLabel)}${o.paymentMethod==='online'&&o.paymentStatus==='paid'?' <span class="vp-status">Đã thanh toán mô phỏng (QR Demo)</span>':''}</p><p><b>Giao nhận:</b> ${esc(addr)}</p>${o.note?`<p><b>Ghi chú:</b> ${esc(o.note)}</p>`:''}${o.orderStatus==='cancelled' && o.history?.length ? `<p><b>Lý do hủy:</b> ${esc(o.history.filter(h=>h.status==='cancelled').at(-1)?.note || '—')}</p>` : ''}${refundHtml}${snapHtml}<div class="vp-line"></div>${items}<div class="vp-line"></div>${o.subtotal!==undefined?`<div class="vp-row"><span>Tiền hàng</span><span>${money(o.subtotal)}</span></div>`:''}${o.discountAmount?`<div class="vp-row"><span>Giảm giá${o.discountCode?` (${esc(o.discountCode)})`:''}</span><span>−${money(o.discountAmount)}</span></div>`:''}${o.shippingFee!==undefined?`<div class="vp-row"><span>Phí vận chuyển</span><span>${money(o.shippingFee)}</span></div>`:''}<div class="vp-row"><strong>Tổng thanh toán</strong><strong>${money(o.total||0)}</strong></div>${windowHint?`<p class="vp-muted" style="margin-top:8px">${esc(windowHint)}</p>`:''}${canPaySim ? demoQr(o) : ''}${changeRequestSection(o)}${cancelRequestSection(o)}<div class="vp-inline-actions">${canPaySim?`<button type="button" class="vp-btn" data-action="customer-pay-sim" data-id="${esc(o.id)}" data-sim="success">TÔI ĐÃ HOÀN TẤT THANH TOÁN MÔ PHỎNG</button><button type="button" class="vp-btn secondary" data-action="customer-pay-sim" data-id="${esc(o.id)}" data-sim="fail">MÔ PHỎNG THẤT BẠI</button>`:''}${canReturn?`<button type="button" class="vp-btn secondary" data-action="open-return-form" data-id="${esc(o.id)}">YÊU CẦU ĐỔI TRẢ / HỖ TRỢ CHẤT LƯỢNG</button>`:''}</div>${returnsHtml}<div id="vp-return-form-wrap"></div></div>`;
     }catch(err){
       if(err.status===401||err.code==='account_locked'){toast(err.message);account('login',err.message);return;}
       box.innerHTML=`<div class="vp-error">${esc(err.message)}</div><button type="button" class="vp-link" data-action="customer-tab" data-tab="orders">← Quay lại danh sách</button>`;
@@ -817,7 +968,8 @@
       ${o.discountAmount?`<div class="vp-row"><span>Khuyến mãi (${esc(o.discountCode||'')})</span><span>−${money(o.discountAmount)}</span></div>`:''}
       <div class="vp-row"><span>Phí vận chuyển</span><span>${money(o.shippingFee)}</span></div>
       <div class="vp-row"><strong>Tổng thanh toán</strong><strong>${money(o.total)}</strong></div>
-      ${isPendingOnline?`${demoQr(o)}<div class="vp-note">Đơn thanh toán trực tuyến mô phỏng đang giữ hàng 15 phút. Chọn kết quả mô phỏng bên dưới:</div><button type="button" class="vp-btn vp-full" data-action="customer-pay-sim" data-id="${esc(o.id)}" data-sim="success" data-confirm="1">MÔ PHỎNG THANH TOÁN THÀNH CÔNG</button><button type="button" class="vp-btn secondary vp-full" data-action="customer-pay-sim" data-id="${esc(o.id)}" data-sim="fail" data-confirm="1">MÔ PHỎNG THANH TOÁN THẤT BẠI</button>`:''}
+      ${isPendingOnline?`${demoQr(o)}<div class="vp-note">Đơn thanh toán QR mô phỏng đang giữ hàng 15 phút. Sau khi kiểm tra thông tin chuyển khoản mẫu, nhấn nút bên dưới:</div><button type="button" class="vp-btn vp-full" data-action="customer-pay-sim" data-id="${esc(o.id)}" data-sim="success" data-confirm="1">TÔI ĐÃ HOÀN TẤT THANH TOÁN MÔ PHỎNG</button><button type="button" class="vp-btn secondary vp-full" data-action="customer-pay-sim" data-id="${esc(o.id)}" data-sim="fail" data-confirm="1">MÔ PHỎNG THANH TOÁN THẤT BẠI</button>`:''}
+      <button type="button" class="vp-btn secondary vp-full" data-action="customer-order-detail-modal" data-id="${esc(o.id)}">XEM CHI TIẾT ĐƠN HÀNG</button>
       <button type="button" class="vp-btn secondary vp-full" data-action="open-orders">XEM LỊCH SỬ ĐƠN HÀNG</button>
     </div>`);
   }
@@ -842,8 +994,8 @@
           <select name="shippingType"><option value="standard">Giao hàng tiêu chuẩn (mô phỏng) · ${money(std)}</option><option value="remote">Giao hàng khu vực xa / hải đảo (mô phỏng) · ${money(rem)}</option></select>
           <p class="vp-muted">Thời gian giao dự kiến: Nội thành Đắk Lắk 1–2 ngày; khác trong tỉnh 2–3 ngày; tỉnh/TP lớn 2–4 ngày; vùng sâu/xa/hải đảo 4–7 ngày hoặc lâu hơn (chỉ mang tính dự kiến).</p>
           <label>Phương thức thanh toán</label>
-          <select name="paymentMethod"><option value="COD">Thanh toán khi nhận hàng(COD)</option><option value="online">Thanh toán bằng QR (demo)</option></select>
-          <p class="vp-muted">Khi chọn QR, mã và thông tin tài khoản demo sẽ hiển thị sau khi xác nhận đặt hàng.</p>
+          <select name="paymentMethod"><option value="COD">Thanh toán khi nhận hàng (COD)</option><option value="online">Thanh toán bằng QR (Demo)</option></select>
+          <div class="vp-note" id="vp-qr-checkout-desc" hidden><b>Chuyển khoản QR mô phỏng:</b> Hệ thống sẽ tạo đơn, giữ tồn kho và hiển thị mã QR demo cùng nội dung chuyển khoản ngay sau khi bạn nhấn "XÁC NHẬN ĐẶT HÀNG".</div>
           <label>Mã khuyến mãi (tối đa 1 mã)</label>
           <div class="vp-row"><input id="vp-promo-input" placeholder="Nhập mã giảm giá" style="flex:1"><button type="button" class="vp-btn secondary" data-action="apply-promo" style="padding:13px 14px">Áp dụng</button><button type="button" class="vp-link" data-action="remove-promo">Xóa</button></div>
           <div id="vp-promo-msg" style="margin-top:8px"></div>
@@ -1045,9 +1197,13 @@
   function adminOrder(id){const o=state.orders.find(x=>x.id===id);if(!o)return;modal('Xử lý '+o.id,`<div class="vp-body">${orderCard(o,true,true)}${o.cancellation ? cancellationSection(o,true) : ''}${supportSection(o,true)}<div class="vp-line"></div><p><b>Cập nhật đơn & vận chuyển</b></p><div class="vp-inline-actions">${o.status==='Chờ xác nhận'?`<button class="vp-btn" data-action="order-step" data-id="${id}" data-step="confirm">Xác nhận đơn</button>`:''}${o.status==='Đã xác nhận'&&!cancellationPending(o)?`<button class="vp-btn" data-action="order-step" data-id="${id}" data-step="ship">Bàn giao vận chuyển</button>`:''}${o.status==='Đang giao'?`<button class="vp-btn" data-action="order-step" data-id="${id}" data-step="delivered">Giao thành công</button><button class="vp-btn secondary" data-action="order-step" data-id="${id}" data-step="failed">Giao thất bại</button>`:''}</div>${o.returnStatus&&o.returnStatus!=='Đã hoàn tất'?`<div class="vp-line"></div>${returnSummary(o)}${o.status==='Đã giao'?`<button class="vp-btn" data-action="complete-return" data-id="${id}">${o.returnExchange?'XÁC NHẬN ĐÃ ĐỔI SIZE':'XÁC NHẬN HOÀN TẤT VÀ NHẬP LẠI HÀNG'}</button>`:'<p>Yêu cầu đang chờ xử lý. Chỉ nhập lại hàng sau khi đơn đã giao và nhận lại sản phẩm.</p>'}`:''}${o.status==='Đã giao'&&o.payment==='COD'?`<div class="vp-line"></div><p>Đối soát COD: ${esc(o.settlement||'Chưa đối soát')}</p><button class="vp-btn secondary" data-action="settle" data-id="${id}">GHI NHẬN ĐÃ THỰC NHẬN</button>`:''}<button class="vp-btn secondary vp-full" data-action="admin-tab" data-tab="orders">QUAY LẠI DANH SÁCH</button></div>`);}
   function showContactInfo() {
     const info = publicPolicies?.storeInfo || {};
-    const phone = info.phone || 'Chưa cập nhật';
-    const email = info.email || 'Chưa cập nhật';
-    const hours = info.supportHours || 'Thứ 2 – Thứ 7, 08:00 – 17:00';
+    const rawPhone = String(info.hotline || info.phone || '').trim();
+    const rawEmail = String(info.email || '').trim();
+    const hasPhone = Boolean(rawPhone && !/^chưa\s/i.test(rawPhone));
+    const hasEmail = Boolean(rawEmail && !/^chưa\s/i.test(rawEmail));
+    const phone = hasPhone ? rawPhone : 'Chưa cập nhật';
+    const email = hasEmail ? rawEmail : 'Chưa cập nhật';
+    const hours = info.hours || info.supportHours || 'Thứ 2 – Thứ 7, 08:00 – 17:00';
     const socialHtml = document.querySelector('.footer-social')?.outerHTML || '';
     modal('LIÊN HỆ VỚI CHÚNG TÔI', `<div class="vp-body contact-details">
       <section class="contact-card">
@@ -1057,8 +1213,8 @@
       </section>
       <section class="contact-card">
         <h3>THÔNG TIN LIÊN HỆ</h3>
-        <dl><dt>Hotline</dt><dd>${info.phone ? `<a href="tel:${esc(info.phone)}">${esc(phone)}</a>` : esc(phone)}</dd>
-          <dt>Email</dt><dd>${info.email ? `<a href="mailto:${esc(info.email)}">${esc(email)}</a>` : esc(email)}</dd>
+        <dl><dt>Hotline</dt><dd>${hasPhone ? `<a href="tel:${esc(phone)}">${esc(phone)}</a>` : esc(phone)}</dd>
+          <dt>Email</dt><dd>${hasEmail ? `<a href="mailto:${esc(email)}">${esc(email)}</a>` : esc(email)}</dd>
           <dt>Thời gian làm việc</dt><dd>${esc(hours)}</dd></dl>
       </section>
       ${socialHtml ? `<section class="contact-card"><h3>KÊNH MẠNG XÃ HỘI</h3>${socialHtml}<p class="footer-contact-note">Liên kết mạng xã hội đang được cập nhật.</p></section>` : ''}
@@ -1084,6 +1240,8 @@
       showContactInfo();
       return;
     }
+    if(action==='showcase-tab'){showcaseTab=el.dataset.showcase||'featured';renderShowcase();return;}
+    if(action==='clear-all-filters'){category='Tất cả';search='';filters={sizes:[],colors:[],prices:[],inStockOnly:false};renderProducts();return;}
     if(action==='filter-reset'){el.closest('form')?.querySelectorAll('input[type="checkbox"]').forEach(input=>{input.checked=false;});return;}
     if(action==='mobile-menu'){const nav=document.querySelector('.main-nav');if(nav){nav.classList.toggle('open');el.setAttribute('aria-expanded',String(nav.classList.contains('open')));}return;} if(action==='close'){close();return;} if(action==='product'){
       if(productPage){
@@ -1109,6 +1267,8 @@
     if(action==='open-cart'){cart();return;}if(action==='open-account'){account(state.user?'profile':'login');return;}if(action==='open-admin'){window.location.href='admin.html';return;}if(action==='policy'){e.preventDefault();openPolicyCenter(el.dataset.policy||'pricing');return;}if(action==='close-policy'){closePolicyDrawer();return;}if(action==='open-return-form'){openCustomerReturnForm(el.dataset.id);return;}if(action==='open-orders'){if(serverMode){if(state.user)account('orders');else{toast('Vui lòng đăng nhập để xem đơn hàng.');account('login');}return;}try{await refreshDatabase();state.user?orders():account();}catch(err){toast(err.message);}return;}
     if(action==='customer-tab'){account(el.dataset.tab);return;}
     if(action==='customer-order-detail'){loadCustomerOrderDetail(el.dataset.id);return;}
+    if(action==='customer-order-detail-modal'){await account('orders');loadCustomerOrderDetail(el.dataset.id);return;}
+    if(action==='copy-text'){try{await navigator.clipboard?.writeText(el.dataset.copy||'');toast('Đã sao chép: '+(el.dataset.copy||''));}catch(_){toast('Nội dung: '+(el.dataset.copy||''));}return;}
     if(action==='toggle-pw'){const inp=el.previousElementSibling;if(inp){const show=inp.type==='password';inp.type=show?'text':'password';el.textContent=show?'Ẩn':'Hiện';}return;}
     if(action==='customer-logout'){try{await apiCustomer('/api/customer/logout','POST');}catch(_){}checkoutPromoCode='';checkoutQuote=null;setCustomerUser(null);toast('Đã đăng xuất.');account('login');return;}
     if(action==='open-search'){modal('Tìm kiếm',`<div class="vp-body"><form class="vp-form" data-form="search"><label>Bạn đang tìm kiếm điều gì?</label><input name="query" value="${esc(search)}" placeholder="Tên sản phẩm, danh mục (có hoặc không dấu)..." autofocus><button class="vp-btn vp-full">TÌM KIẾM</button></form><div class="vp-search-suggestions" id="vp-search-suggestions">${searchSuggestions(search)}</div></div>`);return;}
@@ -1168,9 +1328,70 @@
   });
   document.addEventListener('change',e=>{
     if(e.target.matches('[data-form="checkout"] select[name="shipping"]')){const form=e.target.closest('form'),fee=Number(e.target.value);form.querySelector('[data-checkout-shipping]').textContent=money(fee);form.querySelector('[data-checkout-total]').textContent=money(subtotal()+fee);}
-    if(e.target.matches('[data-form="customer-checkout"] select[name="shippingType"], [data-form="customer-checkout"] select[name="paymentMethod"], [data-form="customer-checkout"] input[name="province"]')){refreshCheckoutPreview();}
+    if(e.target.matches('[data-form="customer-checkout"] select[name="shippingType"], [data-form="customer-checkout"] select[name="paymentMethod"], [data-form="customer-checkout"] input[name="province"]')){
+      const pm=document.querySelector('[data-form="customer-checkout"] select[name="paymentMethod"]')?.value;
+      const qrDesc=document.getElementById('vp-qr-checkout-desc');
+      if(qrDesc)qrDesc.hidden=pm!=='online';
+      refreshCheckoutPreview();
+    }
+    if(e.target.matches('[data-cancel-reason-select]')){
+      const form=e.target.closest('form');
+      const ta=form?.querySelector('textarea[name="reason"]');
+      if(ta){
+        const val=e.target.value;
+        if(val==='other'){ta.value='';ta.placeholder='Vui lòng nhập lý do hủy cụ thể...';ta.focus();}
+        else{ta.value=e.target.options[e.target.selectedIndex]?.textContent||'';}
+      }
+    }
   });
   document.addEventListener('submit',async e=>{const form=e.target.closest('[data-form]');if(!form)return;e.preventDefault();const data=new FormData(form),type=form.dataset.form;
+    if (type === 'customer-cancel-request') {
+      const button = form.querySelector('button[type="submit"]');
+      if (button.disabled) return;
+      button.disabled = true;
+      try {
+        const reasonCode = String(data.get('reasonCode') || 'other');
+        const reason = String(data.get('reason') || '').trim();
+        if (!reason) throw new Error('Vui lòng nhập lý do hủy đơn (không chỉ chứa khoảng trắng).');
+        await apiCustomer(`/api/customer/orders/${encodeURIComponent(form.dataset.id)}/cancel-request`, 'POST', { reasonCode, reason });
+        await refreshDatabase();
+        await loadCustomerOrderDetail(form.dataset.id);
+        toast('Đã gửi yêu cầu hủy đơn tới Admin.');
+      } catch (err) { toast(err.message); }
+      finally { button.disabled = false; }
+      return;
+    }
+    if (type === 'customer-change-request') {
+      const button = form.querySelector('button[type="submit"]');
+      if (button.disabled) return;
+      button.disabled = true;
+      try {
+        const reason = String(data.get('reason') || '').trim();
+        if (!reason) throw new Error('Vui lòng nhập lý do/ghi chú yêu cầu thay đổi.');
+        const addressChange = {
+          receiver: String(data.get('receiver') || '').trim(),
+          phone: String(data.get('phone') || '').trim(),
+          address: String(data.get('address') || '').trim(),
+        };
+        const itemChanges = [];
+        form.querySelectorAll('select[data-item-index]').forEach(sel => {
+          const idx = Number(sel.dataset.itemIndex);
+          const oldSku = sel.dataset.oldSku;
+          const newSku = sel.value;
+          if (newSku && newSku !== oldSku) itemChanges.push({ itemIndex: idx, oldSku, newSku });
+        });
+        await apiCustomer(`/api/customer/orders/${encodeURIComponent(form.dataset.id)}/change-request`, 'POST', {
+          reason,
+          addressChange,
+          itemChanges,
+        });
+        await refreshDatabase();
+        await loadCustomerOrderDetail(form.dataset.id);
+        toast('Đã gửi yêu cầu thay đổi đơn hàng tới Admin.');
+      } catch (err) { toast(err.message); }
+      finally { button.disabled = false; }
+      return;
+    }
     if (type === 'cancel-order' || type === 'edit-order-details') {
       const button = form.querySelector('button[type="submit"]');
       if (button.disabled) return;
@@ -1260,7 +1481,7 @@
       }
       return;
     }
-    if(type==='filters'){filters={sizes:data.getAll('sizes'),colors:data.getAll('colors'),prices:data.getAll('prices')};close();renderProducts();return;}
+    if(type==='filters'){filters={sizes:data.getAll('sizes'),colors:data.getAll('colors'),prices:data.getAll('prices'),inStockOnly:Boolean(data.get('inStockOnly'))};close();renderProducts();return;}
     if(type==='search'){showSearchResults(String(data.get('query') || ''));return;}
     if(type==='login'){state.user={name:String(data.get('name')).trim(),email:String(data.get('email')).trim().toLowerCase()};save();toast('Đã đăng nhập tài khoản thử nghiệm.');account();return;}
     if(type==='customer-login'){
@@ -1510,8 +1731,8 @@
   document.getElementById('catalog-search')?.addEventListener('input',e=>{search=e.target.value;renderProducts();});
   document.getElementById('catalog-category')?.addEventListener('change',e=>{category=e.target.value;renderProducts();});
   document.getElementById('catalog-sort')?.addEventListener('change',e=>{sort=e.target.value;renderProducts();});
-  window.VietPhuc={products,getState:()=>state,renderProducts};
-  renderProducts();updateCount();
+  window.VietPhuc={products,getState:()=>state,renderProducts,renderCategories,renderShowcase};
+  renderCategories();renderShowcase();renderProducts();updateCount();
   if (productPage) {
     window.addEventListener('hashchange', router);
     window.addEventListener('popstate', router);

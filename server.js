@@ -596,8 +596,7 @@ const server = http.createServer((req, res) => {
   if (pathname === '/api/public/contact') {
     if (req.method !== 'POST') return sendJson(res, 405, { error: 'method_not_allowed' });
     if (!verifyWriteRequest(req, res)) return;
-    const rl = checkRateLimit(publicContactRateLimit, clientIp(req), 10, 60 * 1000);
-    if (!rl.ok) {
+    if (!checkPublicContactRateLimit(req.socket.remoteAddress || 'local')) {
       return sendJson(res, 429, { error: 'rate_limited', message: 'Bạn gửi phản hồi quá nhanh. Vui lòng thử lại sau ít phút.' });
     }
     parseJsonBody(req, async (err, body) => {
@@ -1298,6 +1297,18 @@ const server = http.createServer((req, res) => {
 const adminSseClients = new Set();
 const publicSseClients = new Set();
 const publicContactRateLimit = new Map();
+
+function checkPublicContactRateLimit(key) {
+  const now = Date.now();
+  const entry = publicContactRateLimit.get(key);
+  if (!entry || now > entry.resetAt) {
+    publicContactRateLimit.set(key, { count: 1, resetAt: now + 60 * 1000 });
+    return true;
+  }
+  if (entry.count >= 10) return false;
+  entry.count += 1;
+  return true;
+}
 
 function openSseStream(req, res, clientSet) {
   res.writeHead(200, {

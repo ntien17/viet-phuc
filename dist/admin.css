@@ -1911,3 +1911,23 @@ textarea:focus-visible {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+.restock-tabs { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+.restock-tab-btn { padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-main); color: var(--text-main); font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
+.restock-tab-btn.active { background: var(--brand-burgundy); border-color: var(--brand-burgundy); color: var(--text-light); }
+.restock-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0; padding: 14px; background: var(--bg-main); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.restock-stat { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 10px 12px; }
+.restock-stat span { display: block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.restock-stat strong { display: block; margin-top: 4px; font-size: 20px; color: var(--text-main); }
+.restock-stat.is-add strong { color: var(--brand-terracotta); }
+.restock-stat.is-after { border-color: var(--brand-gold); background: var(--bg-secondary); }
+.restock-stat.is-after strong { color: var(--brand-burgundy); }
+.restock-qty-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.restock-qty-input { max-width: 150px; font-size: 18px; font-weight: 700; text-align: center; color: var(--brand-burgundy); }
+.restock-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.restock-chip { padding: 6px 10px; border: 1px solid var(--brand-gold); background: var(--bg-surface); color: var(--text-main); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; cursor: pointer; }
+.restock-chip:hover { background: var(--brand-gold-soft); border-color: var(--brand-burgundy); }
+.restock-sku-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--bg-main); border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: monospace; font-size: 13px; color: var(--brand-burgundy); font-weight: 600; }
+.restock-alert { padding: 10px 12px; border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 12px; border-left: 3px solid var(--danger); background: var(--danger-bg); color: var(--danger); }
+.restock-batch-table input[type="number"] { width: 92px; text-align: center; font-weight: 600; }
+@media (max-width: 640px) { .restock-summary-grid { grid-template-columns: 1fr; } .restock-qty-input { max-width: 100%; } }

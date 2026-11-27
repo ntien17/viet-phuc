@@ -761,6 +761,93 @@
       `;
     }
 
+    const cr = o.cancelRequest;
+    let cancelRequestSectionHtml = '';
+    if (cr) {
+      const crStatusLabel = cr.status === 'pending' ? 'Chờ Admin xử lý' : (cr.status === 'approved' ? 'Đã chấp nhận hủy' : 'Đã từ chối');
+      cancelRequestSectionHtml = `
+        <div class="drawer-section" style="border-color: var(--warning-border); background: var(--warning-bg);">
+          <div class="drawer-section-title" style="color: var(--warning); border-bottom-color: var(--warning-border);">
+            <span>YÊU CẦU HỦY ĐƠN TỪ KHÁCH HÀNG</span>
+            <span class="payment-pill">${esc(crStatusLabel)}</span>
+          </div>
+          <div style="font-size: 13px; line-height: 1.6;">
+            <strong>Lý do khách chọn:</strong> ${esc(cr.reason)}<br>
+            <small style="color: var(--text-muted);">Gửi lúc: ${esc(formatDate(cr.createdAt))}</small>
+            ${cr.resolvedAt ? `<br><strong>Kết quả xử lý (${esc(formatDate(cr.resolvedAt))}):</strong> ${esc(cr.adminReason || '—')}` : ''}
+          </div>
+          ${cr.status === 'pending' ? `
+            <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px;">
+              <button type="button" class="btn btn-danger-solid btn-sm" data-action="admin-cancel-req-approve" data-id="${esc(o.id)}">
+                ${icons.check} Chấp nhận hủy & Giải phóng kho
+              </button>
+              <button type="button" class="btn btn-outline btn-sm" data-action="admin-cancel-req-reject" data-id="${esc(o.id)}">
+                ${icons.x} Từ chối yêu cầu hủy
+              </button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    const changeReqs = Array.isArray(o.changeRequests) ? o.changeRequests : [];
+    let changeRequestsSectionHtml = '';
+    if (changeReqs.length) {
+      changeRequestsSectionHtml = changeReqs.map(ch => {
+        const chLabel = ch.status === 'pending' ? 'Chờ Admin xử lý' : (ch.status === 'approved' ? 'Đã chấp nhận' : 'Đã từ chối');
+        const addrCh = ch.newData?.addressChange;
+        const itemChs = Array.isArray(ch.newData?.items) ? ch.newData.items : [];
+        return `
+          <div class="drawer-section" style="border-color: rgba(185,154,98,0.45); background: #fcfaf6;">
+            <div class="drawer-section-title">
+              <span>YÊU CẦU THAY ĐỔI ĐƠN (${esc(ch.id)})</span>
+              <span class="payment-pill">${esc(chLabel)}</span>
+            </div>
+            <div style="font-size: 13px; line-height: 1.55;">
+              <p style="margin:0 0 8px;"><strong>Lý do khách gửi:</strong> ${esc(ch.reason)} <small style="color:var(--text-muted);">(${esc(formatDate(ch.createdAt))})</small></p>
+              <table style="width:100%;border-collapse:collapse;font-size:12.5px;background:#fff;border:1px solid var(--border);">
+                <thead>
+                  <tr style="background:#f5efe6;text-align:left;">
+                    <th style="padding:6px 8px;border-bottom:1px solid var(--border);">Hạng mục</th>
+                    <th style="padding:6px 8px;border-bottom:1px solid var(--border);">Thông tin cũ</th>
+                    <th style="padding:6px 8px;border-bottom:1px solid var(--border);">Thông tin mới</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${addrCh ? `
+                    <tr>
+                      <td style="padding:6px 8px;border-bottom:1px solid var(--border);">Giao nhận</td>
+                      <td style="padding:6px 8px;border-bottom:1px solid var(--border);">${esc(ch.oldData?.receiver)} · ${esc(ch.oldData?.phone)}<br>${esc(ch.oldData?.address)}</td>
+                      <td style="padding:6px 8px;border-bottom:1px solid var(--border);"><strong>${esc(addrCh.receiver)} · ${esc(addrCh.phone)}</strong><br><strong>${esc(addrCh.address)}</strong></td>
+                    </tr>
+                  ` : ''}
+                  ${itemChs.map(ic => `
+                    <tr>
+                      <td style="padding:6px 8px;border-bottom:1px solid var(--border);">${esc(ic.productName)} × ${ic.qty}</td>
+                      <td style="padding:6px 8px;border-bottom:1px solid var(--border);">${esc(ic.oldColor)} / ${esc(ic.oldSize)}<br><code>${esc(ic.oldSku)}</code> (${money(ic.oldUnitPrice)})</td>
+                      <td style="padding:6px 8px;border-bottom:1px solid var(--border);"><strong>${esc(ic.newColor)} / ${esc(ic.newSize)}</strong><br><code>${esc(ic.newSku)}</code> (${money(ic.newUnitPrice)})</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+              ${ch.newData?.priceDelta ? `<p style="margin:8px 0 0;color:var(--brand-burgundy);"><strong>Chênh lệch tổng tiền (mô phỏng):</strong> ${ch.newData.priceDelta > 0 ? '+' : ''}${money(ch.newData.priceDelta)}</p>` : ''}
+              ${ch.resolvedAt ? `<p style="margin:8px 0 0;"><strong>Phản hồi Admin (${esc(formatDate(ch.resolvedAt))}):</strong> ${esc(ch.adminReason || '—')}</p>` : ''}
+            </div>
+            ${ch.status === 'pending' ? `
+              <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px;">
+                <button type="button" class="btn btn-primary btn-sm" data-action="admin-change-req-approve" data-id="${esc(o.id)}" data-req-id="${esc(ch.id)}">
+                  ${icons.check} Chấp nhận thay đổi
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" data-action="admin-change-req-reject" data-id="${esc(o.id)}" data-req-id="${esc(ch.id)}">
+                  ${icons.x} Từ chối thay đổi
+                </button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
     const ret = (dbState.returns || []).find(r => r.orderId === o.id);
     let returnSectionHtml = '';
     if (ret) {
@@ -834,6 +921,8 @@
               ${actionControlsHtml}
             </div>
 
+            ${cancelRequestSectionHtml}
+            ${changeRequestsSectionHtml}
             ${refundSectionHtml}
             ${returnSectionHtml}
 
@@ -880,7 +969,7 @@
                   <span style="color: var(--brand-burgundy); font-family: var(--font-serif); font-size: 17px;">${money(o.total)}</span>
                 </div>
                 <div style="margin-top: 10px; font-size: 12px; color: var(--text-muted);">
-                  Phương thức: <strong>${o.paymentMethod === 'COD' ? 'Thu tiền khi nhận hàng (COD mô phỏng)' : 'Chuyển khoản trực tuyến mô phỏng'}</strong>
+                  Phương thức: <strong>${o.paymentMethod === 'COD' ? 'Thu tiền khi nhận hàng (COD mô phỏng)' : 'Thanh toán QR Demo (Mô phỏng)'}</strong>
                   · Đối soát: <strong>${esc(settlementText(o.settlementStatus))}</strong>
                 </div>
               </div>
@@ -1395,6 +1484,95 @@
       }
 
       // Hoàn tiền (Refund)
+      if (action === 'admin-cancel-req-approve') {
+        const ok = await showConfirmDialog({
+          title: 'Chấp nhận yêu cầu hủy đơn',
+          message: `Chấp nhận hủy đơn ${orderId}? Tồn kho đang giữ sẽ được giải phóng về kho (không cộng trùng) và đơn thanh toán online đã trả sẽ chuyển trạng thái chờ hoàn tiền mô phỏng.`,
+          confirmText: 'Chấp nhận hủy',
+          danger: true
+        });
+        if (!ok) return;
+        el.classList.add('is-loading');
+        try {
+          await adminActionRequest('POST', `/api/admin/orders/${encodeURIComponent(orderId)}/cancel-request`, { decision: 'approve' });
+          showToast('Đã chấp nhận yêu cầu hủy đơn và giải phóng tồn kho.', 'success');
+        } catch (err) {
+          showToast(err.message, 'danger');
+        } finally {
+          el.classList.remove('is-loading');
+        }
+        return;
+      }
+
+      if (action === 'admin-cancel-req-reject') {
+        const reason = await showPromptDialog({
+          title: 'Từ chối yêu cầu hủy đơn',
+          message: `Nhập lý do từ chối yêu cầu hủy cho đơn ${orderId} (bắt buộc):`,
+          placeholder: 'Ví dụ: Đơn đã chuẩn bị xong và sắp bàn giao đơn vị vận chuyển',
+          confirmText: 'Từ chối yêu cầu'
+        });
+        if (reason === null) return;
+        if (!reason.trim()) {
+          showToast('Vui lòng nhập lý do từ chối yêu cầu hủy.', 'danger');
+          return;
+        }
+        el.classList.add('is-loading');
+        try {
+          await adminActionRequest('POST', `/api/admin/orders/${encodeURIComponent(orderId)}/cancel-request`, { decision: 'reject', adminReason: reason.trim() });
+          showToast('Đã từ chối yêu cầu hủy đơn.', 'info');
+        } catch (err) {
+          showToast(err.message, 'danger');
+        } finally {
+          el.classList.remove('is-loading');
+        }
+        return;
+      }
+
+      if (action === 'admin-change-req-approve') {
+        const reqId = el.dataset.reqId || '';
+        const ok = await showConfirmDialog({
+          title: 'Chấp nhận yêu cầu thay đổi đơn',
+          message: `Xác nhận duyệt yêu cầu ${reqId} cho đơn ${orderId}? Hệ thống sẽ kiểm tra lại tồn kho và cập nhật đơn hàng.`,
+          confirmText: 'Chấp nhận thay đổi'
+        });
+        if (!ok) return;
+        el.classList.add('is-loading');
+        try {
+          await adminActionRequest('POST', `/api/admin/orders/${encodeURIComponent(orderId)}/change-request`, { decision: 'approve', requestId: reqId });
+          showToast('Đã duyệt và cập nhật thay đổi đơn hàng.', 'success');
+        } catch (err) {
+          showToast(err.message, 'danger');
+        } finally {
+          el.classList.remove('is-loading');
+        }
+        return;
+      }
+
+      if (action === 'admin-change-req-reject') {
+        const reqId = el.dataset.reqId || '';
+        const reason = await showPromptDialog({
+          title: 'Từ chối yêu cầu thay đổi đơn',
+          message: `Nhập lý do từ chối yêu cầu ${reqId} (bắt buộc):`,
+          placeholder: 'Ví dụ: Biến thể mới vừa hết hàng hoặc đã chuyển sang đóng gói',
+          confirmText: 'Từ chối'
+        });
+        if (reason === null) return;
+        if (!reason.trim()) {
+          showToast('Vui lòng nhập lý do từ chối yêu cầu thay đổi.', 'danger');
+          return;
+        }
+        el.classList.add('is-loading');
+        try {
+          await adminActionRequest('POST', `/api/admin/orders/${encodeURIComponent(orderId)}/change-request`, { decision: 'reject', requestId: reqId, adminReason: reason.trim() });
+          showToast('Đã từ chối yêu cầu thay đổi đơn.', 'info');
+        } catch (err) {
+          showToast(err.message, 'danger');
+        } finally {
+          el.classList.remove('is-loading');
+        }
+        return;
+      }
+
       if (action === 'order-refund') {
         const amount = Number(el.dataset.amount) || undefined;
         const ok = await showConfirmDialog({

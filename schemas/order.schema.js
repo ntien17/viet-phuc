@@ -113,6 +113,39 @@ function validateOrders(orders, err) {
         err.add(`${op}.refunds`, 'Tổng tiền đã hoàn vượt quá tổng tiền đã thanh toán thành công.');
       }
     }
+
+    if (order.cancelRequest !== undefined && order.cancelRequest !== null) {
+      const cr = order.cancelRequest;
+      const crp = `${op}.cancelRequest`;
+      if (!isPlainObject(cr)) {
+        err.add(crp, 'cancelRequest phải là object.');
+      } else {
+        if (!isNonEmptyString(cr.id, 100)) err.add(`${crp}.id`, 'Thiếu id yêu cầu hủy.');
+        if (!['pending', 'approved', 'rejected'].includes(cr.status)) err.add(`${crp}.status`, 'Trạng thái yêu cầu hủy không hợp lệ.');
+        if (!isNonEmptyString(cr.reason, 500)) err.add(`${crp}.reason`, 'Thiếu lý do yêu cầu hủy.');
+        if (!isIsoDateString(cr.createdAt)) err.add(`${crp}.createdAt`, 'createdAt yêu cầu hủy phải là ngày ISO.');
+        if (cr.resolvedAt !== undefined && cr.resolvedAt !== null && !isIsoDateString(cr.resolvedAt)) err.add(`${crp}.resolvedAt`, 'resolvedAt phải là ngày ISO.');
+        if (cr.adminReason !== undefined && cr.adminReason !== null && typeof cr.adminReason !== 'string') err.add(`${crp}.adminReason`, 'adminReason không hợp lệ.');
+      }
+    }
+
+    if (order.changeRequests !== undefined) {
+      if (!Array.isArray(order.changeRequests) || order.changeRequests.length > 100) {
+        err.add(`${op}.changeRequests`, 'changeRequests phải là mảng hợp lệ.');
+      } else {
+        order.changeRequests.forEach((ch, cIdx) => {
+          const chp = `${op}.changeRequests[${cIdx}]`;
+          if (!isPlainObject(ch)) return err.add(chp, 'changeRequest phải là object.');
+          if (!isNonEmptyString(ch.id, 100)) err.add(`${chp}.id`, 'Thiếu id yêu cầu thay đổi.');
+          if (!['pending', 'approved', 'rejected'].includes(ch.status)) err.add(`${chp}.status`, 'Trạng thái yêu cầu thay đổi không hợp lệ.');
+          if (!['address', 'variant', 'both'].includes(ch.type)) err.add(`${chp}.type`, 'Loại yêu cầu thay đổi không hợp lệ.');
+          if (!isNonEmptyString(ch.reason, 500)) err.add(`${chp}.reason`, 'Thiếu lý do yêu cầu thay đổi.');
+          if (!isIsoDateString(ch.createdAt)) err.add(`${chp}.createdAt`, 'createdAt phải là ngày ISO.');
+          if (ch.resolvedAt !== undefined && ch.resolvedAt !== null && !isIsoDateString(ch.resolvedAt)) err.add(`${chp}.resolvedAt`, 'resolvedAt phải là ngày ISO.');
+          if (!isPlainObject(ch.oldData) || !isPlainObject(ch.newData)) err.add(chp, 'Thiếu oldData hoặc newData.');
+        });
+      }
+    }
   });
 
   return orderIds;
